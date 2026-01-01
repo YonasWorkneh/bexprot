@@ -7,34 +7,68 @@ import PriceUpdater from "./PriceUpdater";
 import BottomNav from "./BottomNav";
 import SupportChatButton from "./SupportChatButton";
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 const MainLayout = () => {
   const { user, updatePreferences } = useAuthStore();
   const [showWelcome, setShowWelcome] = useState(false);
+  const [hasCheckedWelcome, setHasCheckedWelcome] = useState(false);
   const navigate = useNavigate();
 
+  // Check if user has seen welcome dialog (first time visit check)
   useEffect(() => {
-    if (user && !user.preferences?.hasSeenWelcome) {
+    if (!user || hasCheckedWelcome) return;
+
+    // Check both user preferences and localStorage as fallback
+    const hasSeenWelcomeInPrefs = user.preferences?.hasSeenWelcome === true;
+    const hasSeenWelcomeInStorage =
+      localStorage.getItem(`welcome_seen_${user.id}`) === "true";
+
+    // Only show if user hasn't seen it in either place
+    if (!hasSeenWelcomeInPrefs && !hasSeenWelcomeInStorage) {
       // Small delay to ensure smooth loading
-      const timer = setTimeout(() => setShowWelcome(true), 1000);
+      const timer = setTimeout(() => {
+        setShowWelcome(true);
+        setHasCheckedWelcome(true);
+      }, 1000);
       return () => clearTimeout(timer);
+    } else {
+      setHasCheckedWelcome(true);
     }
-  }, [user]);
+  }, [user, hasCheckedWelcome]);
+
+  const markWelcomeAsSeen = async () => {
+    if (!user) return;
+
+    // Update both user preferences and localStorage
+    const updatedPrefs = { ...user.preferences, hasSeenWelcome: true };
+
+    try {
+      await updatePreferences(updatedPrefs);
+      // Also store in localStorage as backup
+      localStorage.setItem(`welcome_seen_${user.id}`, "true");
+    } catch (error) {
+      console.error("Failed to update welcome preference:", error);
+      // Still mark in localStorage even if DB update fails
+      localStorage.setItem(`welcome_seen_${user.id}`, "true");
+    }
+  };
 
   const handleStartGuide = async () => {
-    if (user) {
-      await updatePreferences({ ...user.preferences, hasSeenWelcome: true });
-    }
+    await markWelcomeAsSeen();
     setShowWelcome(false);
     navigate("/how-to-use");
   };
 
   const handleSkip = async () => {
-    if (user) {
-      await updatePreferences({ ...user.preferences, hasSeenWelcome: true });
-    }
+    await markWelcomeAsSeen();
     setShowWelcome(false);
   };
 
@@ -67,14 +101,19 @@ const MainLayout = () => {
       <Dialog open={showWelcome} onOpenChange={setShowWelcome}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-center">Welcome to Bexprot! 🚀</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-center">
+              Welcome to Bexprot! 🚀
+            </DialogTitle>
             <DialogDescription className="text-center pt-2">
               Your advanced platform for crypto, stocks, and forex trading.
               Would you like a quick tour of the features?
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 mt-4">
-            <Button onClick={handleStartGuide} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button
+              onClick={handleStartGuide}
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            >
               Show Me How to Use
             </Button>
             <Button variant="ghost" onClick={handleSkip} className="w-full">

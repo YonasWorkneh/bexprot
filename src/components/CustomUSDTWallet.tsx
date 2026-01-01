@@ -120,8 +120,8 @@ const CustomUSDTWallet = () => {
       return allWallets;
     },
     enabled: !!user?.id,
-    staleTime: 1000 * 30, // 30 seconds stale time
-    refetchInterval: 30000, // Auto-refetch every 30s
+    staleTime: 1000 * 5, // 5 seconds stale time
+    refetchInterval: 10000, // Auto-refetch every 10s
   });
 
   // Calculate total balance
@@ -216,7 +216,7 @@ const CustomUSDTWallet = () => {
                 {isDemo && " (Demo)"}
               </CardDescription>
               <CardTitle className="text-4xl md:text-5xl font-bold mt-2 font-mono">
-                ${formatUSDT(balance)}
+                ${formatUSDT(totalBalance)}
               </CardTitle>
             </div>
             <div className="flex gap-2">

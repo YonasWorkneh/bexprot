@@ -1,21 +1,37 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchTopCryptos, fetchAssetDetail } from "@/lib/coingecko";
-import { fetchStocks, fetchForexPairs, fetchCommodities } from "@/lib/marketData";
+import {
+  fetchStocks,
+  fetchForexPairs,
+  fetchCommodities,
+} from "@/lib/marketData";
 import TradingViewWidget from "@/components/TradingViewWidget";
 import TradingPanel from "@/components/TradingPanel";
 import TradeHistoryPanel from "@/components/TradeHistoryPanel";
+import FavoriteIntervalFilters from "@/components/FavoriteIntervalFilters";
+import ChartIntervalSelector from "@/components/ChartIntervalSelector";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTradingStore } from "@/store/tradingStore";
-import { Loader2, X, TrendingUp, TrendingDown, Activity, BarChart3, Search } from "lucide-react";
+import {
+  Loader2,
+  X,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  BarChart3,
+  Search,
+} from "lucide-react";
 import { formatBalance } from "@/lib/walletUtils";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 const Trade = () => {
   const [selectedAsset, setSelectedAsset] = useState("bitcoin");
-  const [assetType, setAssetType] = useState<"crypto" | "stock" | "forex" | "commodity">("crypto");
+  const [assetType, setAssetType] = useState<
+    "crypto" | "stock" | "forex" | "commodity"
+  >("crypto");
   const [assetSymbol, setAssetSymbol] = useState("BTC");
   const [assetName, setAssetName] = useState("Bitcoin");
   const [currentPrice, setCurrentPrice] = useState(0);
@@ -24,7 +40,8 @@ const Trade = () => {
 
   const [timeframe, setTimeframe] = useState(1); // Default 1 day for chart data fetch (not used for TV widget)
   const [showTradeMarkers, setShowTradeMarkers] = useState(true);
-  const { orders, positions, cancelOrder, closePosition, systemSettings } = useTradingStore();
+  const { orders, positions, cancelOrder, closePosition, systemSettings } =
+    useTradingStore();
 
   // Fetch data based on asset type
   const { data: cryptos } = useQuery({
@@ -66,13 +83,19 @@ const Trade = () => {
           console.error("Failed to fetch crypto price", e);
         }
       } else if (assetType === "stock") {
-        const stock = await fetchStocks().then(res => res.find(s => s.symbol === selectedAsset));
+        const stock = await fetchStocks().then((res) =>
+          res.find((s) => s.symbol === selectedAsset)
+        );
         if (stock) setCurrentPrice(stock.price);
       } else if (assetType === "forex") {
-        const pair = await fetchForexPairs().then(res => res.find(p => p.symbol === selectedAsset));
+        const pair = await fetchForexPairs().then((res) =>
+          res.find((p) => p.symbol === selectedAsset)
+        );
         if (pair) setCurrentPrice(pair.rate);
       } else if (assetType === "commodity") {
-        const comm = await fetchCommodities().then(res => res.find(c => c.symbol === selectedAsset));
+        const comm = await fetchCommodities().then((res) =>
+          res.find((c) => c.symbol === selectedAsset)
+        );
         if (comm) setCurrentPrice(comm.price);
       }
     };
@@ -90,17 +113,30 @@ const Trade = () => {
     if (assetType === "forex") return `FX:${assetSymbol.replace("/", "")}`;
     if (assetType === "commodity") {
       const map: Record<string, string> = {
-        'GC': 'TVC:GOLD', 'SI': 'TVC:SILVER', 'CL': 'TVC:USOIL', 'NG': 'TVC:NATURALGAS',
-        'HG': 'TVC:COPPER', 'PL': 'TVC:PLATINUM', 'ZW': 'CBOT:ZW1!', 'ZC': 'CBOT:ZC1!',
-        'PA': 'TVC:PALLADIUM', 'AL': 'TVC:ALUMINUM', 'KC': 'TVC:COFFEE', 'SB': 'TVC:SUGAR',
-        'CT': 'TVC:COTTON', 'CC': 'TVC:COCOA'
+        GC: "TVC:GOLD",
+        SI: "TVC:SILVER",
+        CL: "TVC:USOIL",
+        NG: "TVC:NATURALGAS",
+        HG: "TVC:COPPER",
+        PL: "TVC:PLATINUM",
+        ZW: "CBOT:ZW1!",
+        ZC: "CBOT:ZC1!",
+        PA: "TVC:PALLADIUM",
+        AL: "TVC:ALUMINUM",
+        KC: "TVC:COFFEE",
+        SB: "TVC:SUGAR",
+        CT: "TVC:COTTON",
+        CC: "TVC:COCOA",
       };
       return map[assetSymbol] || `TVC:${assetSymbol}`;
     }
     return `CRYPTO:${assetSymbol}USD`;
   };
 
-  const handleAssetSelect = (asset: any, type: "crypto" | "stock" | "forex" | "commodity") => {
+  const handleAssetSelect = (
+    asset,
+    type: "crypto" | "stock" | "forex" | "commodity"
+  ) => {
     setAssetType(type);
     if (type === "crypto") {
       setSelectedAsset(asset.id);
@@ -129,21 +165,47 @@ const Trade = () => {
   const getFilteredResults = () => {
     const query = searchQuery.toLowerCase();
     if (assetType === "crypto") {
-      return cryptos?.filter(c => c.name.toLowerCase().includes(query) || c.symbol.toLowerCase().includes(query)) || [];
+      return (
+        cryptos?.filter(
+          (c) =>
+            c.name.toLowerCase().includes(query) ||
+            c.symbol.toLowerCase().includes(query)
+        ) || []
+      );
     }
     if (assetType === "stock") {
-      return stocks?.filter(s => s.name.toLowerCase().includes(query) || s.symbol.toLowerCase().includes(query)) || [];
+      return (
+        stocks?.filter(
+          (s) =>
+            s.name.toLowerCase().includes(query) ||
+            s.symbol.toLowerCase().includes(query)
+        ) || []
+      );
     }
     if (assetType === "forex") {
-      return forex?.filter(f => f.name.toLowerCase().includes(query) || f.symbol.toLowerCase().includes(query)) || [];
+      return (
+        forex?.filter(
+          (f) =>
+            f.name.toLowerCase().includes(query) ||
+            f.symbol.toLowerCase().includes(query)
+        ) || []
+      );
     }
     if (assetType === "commodity") {
-      return commodities?.filter(c => c.name.toLowerCase().includes(query) || c.symbol.toLowerCase().includes(query)) || [];
+      return (
+        commodities?.filter(
+          (c) =>
+            c.name.toLowerCase().includes(query) ||
+            c.symbol.toLowerCase().includes(query)
+        ) || []
+      );
     }
     return [];
   };
 
-  const [tradingMode, setTradingMode] = useState<"spot" | "futures" | "contract">("spot");
+  const [tradingMode, setTradingMode] = useState<
+    "spot" | "futures" | "contract"
+  >("spot");
 
   // ... (existing code)
 
@@ -152,14 +214,16 @@ const Trade = () => {
       {/* Header Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4 shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground hidden md:block">Trade</h1>
+          <h1 className="text-2xl font-bold text-foreground hidden md:block">
+            Trade
+          </h1>
 
           {/* Mode Selector */}
           <div className="flex bg-secondary/50 p-1 rounded-lg border border-border">
             {(["spot", "futures", "contract"] as const)
-              .filter(mode => mode !== 'contract' || orders.length >= 0) // Placeholder to keep TS happy
-              .filter(mode => {
-                if (mode === 'contract') {
+              .filter((mode) => mode !== "contract" || orders.length >= 0) // Placeholder to keep TS happy
+              .filter((mode) => {
+                if (mode === "contract") {
                   return systemSettings.contract_trading_enabled;
                 }
                 return true;
@@ -168,10 +232,11 @@ const Trade = () => {
                 <button
                   key={mode}
                   onClick={() => setTradingMode(mode)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all capitalize ${tradingMode === mode
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                    }`}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all capitalize ${
+                    tradingMode === mode
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   {mode}
                 </button>
@@ -180,10 +245,15 @@ const Trade = () => {
 
           <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="min-w-[160px] justify-between">
+              <Button
+                variant="outline"
+                className="min-w-[160px] justify-between"
+              >
                 <div className="flex items-center gap-2">
                   <span className="font-bold">{assetSymbol}</span>
-                  <span className="text-muted-foreground text-xs">| {assetName}</span>
+                  <span className="text-muted-foreground text-xs">
+                    | {assetName}
+                  </span>
                 </div>
                 <Search size={16} className="text-muted-foreground" />
               </Button>
@@ -191,20 +261,25 @@ const Trade = () => {
             <DialogContent className="max-w-md p-0">
               <div className="p-4 border-b border-border">
                 <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                  {(["crypto", "stock", "forex", "commodity"] as const).map((type) => (
-                    <Button
-                      key={type}
-                      variant={assetType === type ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => setAssetType(type)}
-                      className="capitalize"
-                    >
-                      {type}
-                    </Button>
-                  ))}
+                  {(["crypto", "stock", "forex", "commodity"] as const).map(
+                    (type) => (
+                      <Button
+                        key={type}
+                        variant={assetType === type ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setAssetType(type)}
+                        className="capitalize"
+                      >
+                        {type}
+                      </Button>
+                    )
+                  )}
                 </div>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                  <Search
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    size={16}
+                  />
                   <Input
                     placeholder="Search assets..."
                     className="pl-9"
@@ -214,19 +289,29 @@ const Trade = () => {
                 </div>
               </div>
               <div className="max-h-[300px] overflow-y-auto p-2">
-                {getFilteredResults().map((item: any) => (
+                {getFilteredResults().map((item) => (
                   <button
                     key={item.id || item.symbol}
                     className="w-full flex items-center justify-between p-3 hover:bg-secondary rounded-lg transition-colors text-left"
                     onClick={() => handleAssetSelect(item, assetType)}
                   >
                     <div>
-                      <div className="font-bold">{item.symbol.toUpperCase()}</div>
-                      <div className="text-xs text-muted-foreground">{item.name}</div>
+                      <div className="font-bold">
+                        {item.symbol.toUpperCase()}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {item.name}
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="font-mono">
-                        ${(item.current_price || item.price || item.rate || 0).toLocaleString()}
+                        $
+                        {(
+                          item.current_price ||
+                          item.price ||
+                          item.rate ||
+                          0
+                        ).toLocaleString()}
                       </div>
                     </div>
                   </button>
@@ -239,7 +324,9 @@ const Trade = () => {
         <div className="flex items-center gap-2">
           <div className="text-right mr-4 hidden md:block">
             <div className="text-xs text-muted-foreground">Current Price</div>
-            <div className="text-lg font-mono font-bold">${currentPrice.toLocaleString()}</div>
+            <div className="text-lg font-mono font-bold">
+              ${currentPrice.toLocaleString()}
+            </div>
           </div>
         </div>
       </div>
@@ -248,7 +335,11 @@ const Trade = () => {
         {/* Left Column: Trading Panel */}
         <div className="flex flex-col gap-4 order-2 xl:order-1">
           <TradingPanel
-            assetId={assetType === 'crypto' ? `crypto_${selectedAsset}` : `${assetType}_${selectedAsset}`}
+            assetId={
+              assetType === "crypto"
+                ? `crypto_${selectedAsset}`
+                : `${assetType}_${selectedAsset}`
+            }
             assetSymbol={assetSymbol}
             currentPrice={currentPrice}
             tradingMode={tradingMode}
@@ -259,11 +350,22 @@ const Trade = () => {
         <div className="xl:col-span-2 flex flex-col gap-4 md:min-h-0 order-1 xl:order-2">
           {/* Chart Area */}
           <div className="flex-1 min-h-[450px] bg-card border border-border rounded-xl overflow-hidden relative flex flex-col">
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">
+                  {assetSymbol}
+                </span>
+                <FavoriteIntervalFilters
+                  value={tvInterval}
+                  onChange={setTvInterval}
+                />
+              </div>
+            </div>
             <div className="flex-1">
               <TradingViewWidget
                 symbol={getTradingViewSymbol()}
                 height={600}
-                assetId={assetType === 'crypto' ? selectedAsset : assetSymbol}
+                assetId={assetType === "crypto" ? selectedAsset : assetSymbol}
                 interval={tvInterval}
               />
             </div>
@@ -271,15 +373,31 @@ const Trade = () => {
 
           {/* Orders & Positions Tabs */}
           <div className="bg-card border border-border rounded-xl min-h-[250px] overflow-hidden flex flex-col">
-            <Tabs defaultValue="positions" className="w-full h-full flex flex-col">
+            <Tabs
+              defaultValue="positions"
+              className="w-full h-full flex flex-col"
+            >
               <div className="border-b border-border px-4">
                 <TabsList className="h-12 bg-transparent">
-                  <TabsTrigger value="positions" className="data-[state=active]:bg-secondary">Positions</TabsTrigger>
-                  <TabsTrigger value="orders" className="data-[state=active]:bg-secondary">Open Orders</TabsTrigger>
+                  <TabsTrigger
+                    value="positions"
+                    className="data-[state=active]:bg-secondary"
+                  >
+                    Positions
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="orders"
+                    className="data-[state=active]:bg-secondary"
+                  >
+                    Open Orders
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
-              <TabsContent value="positions" className="flex-1 overflow-auto p-0 m-0">
+              <TabsContent
+                value="positions"
+                className="flex-1 overflow-auto p-0 m-0"
+              >
                 <table className="w-full text-sm text-left">
                   <thead className="bg-secondary/50 text-muted-foreground sticky top-0">
                     <tr>
@@ -297,14 +415,29 @@ const Trade = () => {
                       positions.map((pos) => (
                         <tr key={pos.id} className="hover:bg-secondary/20">
                           <td className="p-3 font-medium">{pos.assetName}</td>
-                          <td className={`p-3 capitalize ${pos.side === 'buy' ? 'text-green-500' : 'text-red-500'}`}>
+                          <td
+                            className={`p-3 capitalize ${
+                              pos.side === "buy"
+                                ? "text-green-500"
+                                : "text-red-500"
+                            }`}
+                          >
                             {pos.side}
                           </td>
                           <td className="p-3 font-mono">{pos.amount}</td>
-                          <td className="p-3 font-mono">${formatBalance(pos.entryPrice)}</td>
-                          <td className="p-3 font-mono">${formatBalance(pos.currentPrice)}</td>
-                          <td className={`p-3 font-mono ${pos.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            ${formatBalance(pos.pnl)} ({pos.pnlPercentage.toFixed(2)}%)
+                          <td className="p-3 font-mono">
+                            ${formatBalance(pos.entryPrice)}
+                          </td>
+                          <td className="p-3 font-mono">
+                            ${formatBalance(pos.currentPrice)}
+                          </td>
+                          <td
+                            className={`p-3 font-mono ${
+                              pos.pnl >= 0 ? "text-green-500" : "text-red-500"
+                            }`}
+                          >
+                            ${formatBalance(pos.pnl)} (
+                            {pos.pnlPercentage.toFixed(2)}%)
                           </td>
                           <td className="p-3 text-right">
                             <Button
@@ -320,7 +453,10 @@ const Trade = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                        <td
+                          colSpan={7}
+                          className="p-8 text-center text-muted-foreground"
+                        >
                           No open positions
                         </td>
                       </tr>
@@ -329,7 +465,10 @@ const Trade = () => {
                 </table>
               </TabsContent>
 
-              <TabsContent value="orders" className="flex-1 overflow-auto p-0 m-0">
+              <TabsContent
+                value="orders"
+                className="flex-1 overflow-auto p-0 m-0"
+              >
                 <table className="w-full text-sm text-left">
                   <thead className="bg-secondary/50 text-muted-foreground sticky top-0">
                     <tr>
@@ -348,12 +487,22 @@ const Trade = () => {
                         <tr key={order.id} className="hover:bg-secondary/20">
                           <td className="p-3 font-medium">{order.assetName}</td>
                           <td className="p-3 capitalize">{order.type}</td>
-                          <td className={`p-3 capitalize ${order.side === 'buy' ? 'text-green-500' : 'text-red-500'}`}>
+                          <td
+                            className={`p-3 capitalize ${
+                              order.side === "buy"
+                                ? "text-green-500"
+                                : "text-red-500"
+                            }`}
+                          >
                             {order.side}
                           </td>
-                          <td className="p-3 font-mono">${formatBalance(order.price)}</td>
+                          <td className="p-3 font-mono">
+                            ${formatBalance(order.price)}
+                          </td>
                           <td className="p-3 font-mono">{order.amount}</td>
-                          <td className="p-3 font-mono">${formatBalance(order.total)}</td>
+                          <td className="p-3 font-mono">
+                            ${formatBalance(order.total)}
+                          </td>
                           <td className="p-3 text-right">
                             <Button
                               variant="ghost"
@@ -368,7 +517,10 @@ const Trade = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                        <td
+                          colSpan={7}
+                          className="p-8 text-center text-muted-foreground"
+                        >
                           No open orders
                         </td>
                       </tr>
@@ -382,7 +534,7 @@ const Trade = () => {
           {/* Trade History Panel */}
           <div>
             <TradeHistoryPanel
-              assetId={assetType === 'crypto' ? selectedAsset : assetSymbol}
+              assetId={assetType === "crypto" ? selectedAsset : assetSymbol}
               assetName={assetName}
             />
           </div>

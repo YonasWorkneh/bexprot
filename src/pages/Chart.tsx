@@ -285,6 +285,7 @@ const Chart = () => {
             assetId={selectedAsset}
             assetSymbol={selectedAssetData?.symbol || ""}
             currentPrice={currentPrice}
+            tradingMode="spot"
           />
         </div>
       </div>

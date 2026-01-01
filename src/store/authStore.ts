@@ -34,7 +34,7 @@ interface AuthState {
   registerWithMagicLink: (name: string, email: string, phone?: string) => Promise<{ success: boolean; error?: string; confirmationRequired?: boolean }>;
   loginWithMagicLink: (email: string) => Promise<{ success: boolean; error?: string; confirmationRequired?: boolean }>;
   verifyOtp: (identifier: string, token: string, type?: 'sms' | 'email') => Promise<{ success: boolean; error?: string }>;
-  logout: () => Promise<void>;
+  logout: (redirectTo?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   updatePreferences: (preferences: any) => Promise<{ success: boolean; error?: string }>;
@@ -297,8 +297,7 @@ export const useAuthStore = create<AuthState>()(
     },
 
     // Logout user
-    // Logout user
-    logout: async () => {
+    logout: async (redirectTo?: string) => {
       try {
         await supabase.auth.signOut();
       } catch (error) {
@@ -317,7 +316,8 @@ export const useAuthStore = create<AuthState>()(
       set({ user: null, isAuthenticated: false, isLoading: false });
 
       // Force reload to clear any in-memory stores and reset app to initial state
-      window.location.href = '/auth';
+      // Default to /auth, but allow custom redirect (e.g., /admin for admin logout)
+      window.location.href = redirectTo || '/auth';
     },
 
     // Reset password

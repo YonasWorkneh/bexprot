@@ -67,7 +67,7 @@ export async function createSupportTicket(
         if (messageError) throw messageError;
 
         return { success: true, ticket };
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error creating support ticket:', error);
         return { success: false, error: error.message };
     }
@@ -105,7 +105,7 @@ export async function sendSupportMessage(
             .eq('id', ticketId);
 
         return { success: true, message: data };
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error sending support message:', error);
         return { success: false, error: error.message };
     }
@@ -147,7 +147,7 @@ export async function getAllTickets(): Promise<SupportTicketWithMessages[]> {
 
         // Fetch messages for each ticket
         const ticketsWithMessages = await Promise.all(
-            (tickets || []).map(async (ticket: any) => {
+            (tickets || []).map(async (ticket) => {
                 const { data: messages } = await supabase
                     .from('support_messages')
                     .select('*')
@@ -179,6 +179,8 @@ export async function getTicketMessages(ticketId: string): Promise<SupportMessag
             .select('*')
             .eq('ticket_id', ticketId)
             .order('created_at', { ascending: true });
+        
+            console.log("data: ", data);
 
         if (error) throw error;
         return data || [];
@@ -203,7 +205,7 @@ export async function updateTicketStatus(
 
         if (error) throw error;
         return { success: true };
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error updating ticket status:', error);
         return { success: false, error: error.message };
     }
@@ -231,7 +233,7 @@ export async function uploadSupportImage(
             .getPublicUrl(fileName);
 
         return { success: true, url: publicUrl };
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error uploading support image:', error);
         return { success: false, error: error.message };
     }

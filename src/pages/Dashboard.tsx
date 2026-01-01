@@ -2,7 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchTopCryptos } from "@/lib/coingecko";
 import PriceCard from "@/components/PriceCard";
 import { useNavigate } from "react-router-dom";
-import { Loader2, TrendingUp, ChevronDown, ChevronUp, Wallet } from "lucide-react";
+import {
+  Loader2,
+  TrendingUp,
+  ChevronDown,
+  ChevronUp,
+  Wallet,
+} from "lucide-react";
 import { useTradingStore } from "@/store/tradingStore";
 import { useAuthStore } from "@/store/authStore";
 import PositionsPanel from "@/components/PositionsPanel";
@@ -11,7 +17,14 @@ import TradingViewWidget from "@/components/TradingViewWidget";
 import RecentActivity from "@/components/RecentActivity";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import ChartIntervalSelector from "@/components/ChartIntervalSelector";
+import FavoriteIntervalFilters from "@/components/FavoriteIntervalFilters";
+import { getAllUserWallets, formatUSDT } from "@/lib/usdtWalletUtils";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -22,10 +35,26 @@ const Dashboard = () => {
     getTotalTrades,
     getWinRate,
     positions,
-    orderHistory
+    orderHistory,
   } = useTradingStore();
   const user = useAuthStore((state) => state.user);
   const [isPanelsOpen, setIsPanelsOpen] = useState(true);
+  const [chartInterval, setChartInterval] = useState("D");
+
+  // Fetch wallets and calculate total balance
+  const { data: wallets = [] } = useQuery({
+    queryKey: ["dashboard-wallets", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      return await getAllUserWallets(user.id);
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 5, // 5 seconds stale time
+    refetchInterval: 10000, // Auto-refetch every 10 seconds
+  });
+
+  // Calculate total balance from all network wallets
+  const totalWalletBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
 
   const { data: cryptos, isLoading } = useQuery({
     queryKey: ["topCryptos"],
@@ -47,7 +76,9 @@ const Dashboard = () => {
           <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
             {user ? `Welcome back, ${user.name}!` : "Dashboard"}
           </h1>
-          <p className="text-muted-foreground">Your trading overview and market data</p>
+          <p className="text-muted-foreground">
+            Your trading overview and market data
+          </p>
         </div>
       </div>
 
@@ -60,45 +91,62 @@ const Dashboard = () => {
             <Wallet className="text-primary" size={18} />
           </div>
           <div className="text-2xl font-mono font-bold text-foreground">
-            ${equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatUSDT(totalWalletBalance)}
           </div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-muted-foreground">Total P&L</div>
-            <TrendingUp className={totalPnL >= 0 ? "text-success" : "text-danger"} size={18} />
+            <TrendingUp
+              className={totalPnL >= 0 ? "text-success" : "text-danger"}
+              size={18}
+            />
           </div>
-          <div className={`text-2xl font-mono font-bold ${totalPnL >= 0 ? "text-success" : "text-danger"}`}>
+          <div
+            className={`text-2xl font-mono font-bold ${
+              totalPnL >= 0 ? "text-success" : "text-danger"
+            }`}
+          >
             {totalPnL >= 0 ? "+" : ""}${totalPnL.toFixed(2)}
           </div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6">
-          <div className="text-sm text-muted-foreground mb-2">Open Positions</div>
-          <div className="text-2xl font-bold text-foreground">{openPositions}</div>
+          <div className="text-sm text-muted-foreground mb-2">
+            Open Positions
+          </div>
+          <div className="text-2xl font-bold text-foreground">
+            {openPositions}
+          </div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="text-sm text-muted-foreground mb-2">Total Trades</div>
-          <div className="text-2xl font-bold text-foreground">{totalTrades}</div>
+          <div className="text-2xl font-bold text-foreground">
+            {totalTrades}
+          </div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="text-sm text-muted-foreground mb-2">Win Rate</div>
           <div className="text-2xl font-bold text-foreground">
-            {totalTrades > 0
-              ? `${winRate.toFixed(1)}%`
-              : "—"}
+            {totalTrades > 0 ? `${winRate.toFixed(1)}%` : "—"}
           </div>
         </div>
       </div>
 
       {/* Trading Panels (Collapsible) */}
       {(positions.length > 0 || orderHistory.length > 0) && (
-        <Collapsible open={isPanelsOpen} onOpenChange={setIsPanelsOpen} className="space-y-2">
+        <Collapsible
+          open={isPanelsOpen}
+          onOpenChange={setIsPanelsOpen}
+          className="space-y-2"
+        >
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">Active Orders & Positions</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              Active Orders & Positions
+            </h2>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-9 p-0">
                 {isPanelsOpen ? (
@@ -122,12 +170,27 @@ const Dashboard = () => {
       {/* Favorite Chart & Activity Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-card border border-border rounded-lg p-4 h-[500px]">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">Favorite Chart</h2>
-            <div className="text-sm text-muted-foreground">BTC/USD</div>
+          <div className="mb-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-foreground">
+                Favorite Chart
+              </h2>
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-muted-foreground">BTC/USD</div>
+              </div>
+            </div>
+            {/* Favorite Interval Filters */}
+            <FavoriteIntervalFilters
+              value={chartInterval}
+              onChange={setChartInterval}
+            />
           </div>
-          <div className="h-[calc(100%-2rem)]">
-            <TradingViewWidget symbol="CRYPTO:BTCUSD" height="100%" />
+          <div className="h-[calc(100%-3rem)]">
+            <TradingViewWidget
+              symbol="CRYPTO:BTCUSD"
+              height={420}
+              interval={chartInterval}
+            />
           </div>
         </div>
         <div className="lg:col-span-1 h-[500px]">
@@ -137,7 +200,9 @@ const Dashboard = () => {
 
       {/* Market Overview */}
       <div>
-        <h2 className="text-xl font-semibold text-foreground mb-4">Top Cryptocurrencies</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">
+          Top Cryptocurrencies
+        </h2>
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 className="animate-spin text-primary" size={40} />

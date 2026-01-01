@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
+import { useNavigate } from "react-router-dom";
 
 interface FormData {
   fullName: string;
@@ -36,6 +37,7 @@ interface FormData {
 }
 
 const KYC = () => {
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const [isSuccess, setIsSuccess] = useState(false);
   const [step, setStep] = useState(1);
@@ -291,10 +293,7 @@ const KYC = () => {
             <span className="text-sm font-mono">{user?.id.slice(0, 8)}...</span>
           </div>
         </div>
-        <Button
-          onClick={() => (window.location.href = "/dashboard")}
-          className="min-w-[200px]"
-        >
+        <Button onClick={() => navigate("/")} className="min-w-[200px]">
           Return to Dashboard
         </Button>
       </div>

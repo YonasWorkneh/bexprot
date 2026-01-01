@@ -218,14 +218,7 @@ const App = () => {
                   }
                 />
                 <Route element={<MainLayout />}>
-                  <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    }
-                  />
+                  <Route path="/" element={<Dashboard />} />
                   <Route
                     path="/trade"
                     element={

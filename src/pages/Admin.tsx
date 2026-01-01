@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,108 +80,146 @@ interface KycSubmission {
 }
 
 import { useAuthStore } from "@/store/authStore";
+import { Order } from "@/store/tradingStore";
 
 const Admin = () => {
   const { user, logout } = useAuthStore();
-  const [users, setUsers] = useState<UserData[]>([]);
+  const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-  const [kycDetails, setKycDetails] = useState<KycSubmission | null>(null);
   const [userDetails, setUserDetails] = useState<any | null>(null); // For full details from RPC
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustType, setAdjustType] = useState<"credit" | "debit">("credit");
   const navigate = useNavigate();
 
-  useEffect(() => {
-    checkAdminAuth();
-  }, [user]);
-
-  const checkAdminAuth = async () => {
-    if (!user || user.role !== "admin") {
-      // Wait a bit if user is still loading, but if we have a user and they are not admin, redirect
-      if (user) {
-        navigate("/admin");
-      }
-      return;
-    }
-
-    if (users.length === 0) fetchUsers();
-  };
-
-  const fetchUsers = async (showLoading = true) => {
-    if (showLoading) setIsLoading(true);
-    else setIsRefreshing(true);
-
-    try {
+  // Fetch users with React Query
+  const {
+    data: users = [],
+    isLoading,
+    isRefetching: isRefreshing,
+    refetch: refetchUsers,
+    error: usersError,
+  } = useQuery<UserData[]>({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("users")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setUsers((data || []) as UserData[]);
-    } catch (error: any) {
-      toast.error("Failed to fetch users: " + error.message);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (error) {
+        toast.error("Failed to fetch users: " + error.message);
+        throw error;
+      }
+      return (data || []) as UserData[];
+    },
+    enabled: !!user && user.role === "admin",
+    staleTime: 1000 * 15, // 15 seconds stale time
+    refetchInterval: 30000, // Auto-refetch every 30 seconds
+    retry: 2,
+  });
+
+  useEffect(() => {
+    checkAdminAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const checkAdminAuth = async () => {
+    // If user is not available yet, check localStorage session
+    if (!user) {
+      const adminSession = localStorage.getItem("admin_session");
+      if (adminSession) {
+        try {
+          const session = JSON.parse(adminSession);
+          if (session.expiresAt > Date.now()) {
+            // Valid session exists, user object should load soon
+            // Don't redirect, just wait for user to load
+            // AdminProtectedRoute will handle the check
+            return;
+          }
+        } catch (e) {
+          // Invalid session
+        }
+      }
+
+      // No valid session and no user, but AdminProtectedRoute will handle redirect
+      // Don't redirect here to avoid conflicts
+      return;
     }
+
+    // User is loaded, verify admin role
+    if (user.role !== "admin") {
+      navigate("/admin");
+      return;
+    }
+
+    // User is admin, React Query will handle fetching users
   };
 
-  const fetchKycDetails = async (userId: string) => {
-    setIsLoadingDetails(true);
-    try {
+  // Manual refresh function
+  const handleRefreshUsers = () => {
+    refetchUsers();
+    toast.success("Refreshing users...");
+  };
+
+  // Fetch KYC details with React Query
+  const {
+    data: kycDetails,
+    isLoading: isLoadingDetails,
+    refetch: refetchKycDetails,
+  } = useQuery<KycSubmission | null>({
+    queryKey: ["kyc-details", selectedUser?.id],
+    queryFn: async () => {
+      if (!selectedUser?.id) return null;
+
       const { data, error } = await supabase
         .from("kyc_submissions")
         .select("*")
-        .eq("user_id", userId)
+        .eq("user_id", selectedUser.id)
         .single();
 
-      if (error && error.code !== "PGRST116") throw error; // PGRST116 is "no rows returned"
+      if (error && error.code !== "PGRST116") {
+        // PGRST116 is "no rows returned"
+        console.error("Error fetching KYC details:", error);
+        throw error;
+      }
 
-      if (data) {
-        // Generate signed URLs for images
-        const signedData = { ...data };
-        const imageFields = ["id_front_url", "id_back_url", "selfie_url"];
+      if (!data) return null;
 
-        for (const field of imageFields) {
-          const urlOrPath = data[field];
-          if (urlOrPath) {
-            // Extract path if it's a full URL
-            let path = urlOrPath;
-            if (
-              urlOrPath.includes("/storage/v1/object/public/kyc-documents/")
-            ) {
-              path = urlOrPath.split(
-                "/storage/v1/object/public/kyc-documents/"
-              )[1];
-            }
+      // Generate signed URLs for images
+      const signedData = { ...data };
+      const imageFields = ["id_front_url", "id_back_url", "selfie_url"];
 
-            // Generate signed URL (valid for 1 hour)
-            const { data: signedUrlData, error: signedError } =
-              await supabase.storage
-                .from("kyc-documents")
-                .createSignedUrl(path, 3600);
+      for (const field of imageFields) {
+        const urlOrPath = data[field];
+        if (urlOrPath) {
+          // Extract path if it's a full URL
+          let path = urlOrPath;
+          if (urlOrPath.includes("/storage/v1/object/public/kyc-documents/")) {
+            path = urlOrPath.split(
+              "/storage/v1/object/public/kyc-documents/"
+            )[1];
+          }
 
-            if (!signedError && signedUrlData) {
-              signedData[field] = signedUrlData.signedUrl;
-            }
+          // Generate signed URL (valid for 1 hour)
+          const { data: signedUrlData, error: signedError } =
+            await supabase.storage
+              .from("kyc-documents")
+              .createSignedUrl(path, 3600);
+
+          if (!signedError && signedUrlData) {
+            signedData[field] = signedUrlData.signedUrl;
           }
         }
-        setKycDetails(signedData);
-      } else {
-        setKycDetails(null);
       }
-    } catch (error: any) {
-      console.error("Error fetching KYC details:", error);
-      toast.error("Failed to fetch KYC details");
-    } finally {
-      setIsLoadingDetails(false);
-    }
-  };
+
+      return signedData as KycSubmission;
+    },
+    enabled: !!selectedUser?.id && isDetailsOpen,
+    staleTime: 1000 * 5, // 5 seconds stale time
+    refetchInterval: 10000, // Refetch every 10 seconds
+    retry: 2,
+  });
 
   const fetchFullUserDetails = async (userId: string) => {
     try {
@@ -230,12 +269,8 @@ const Admin = () => {
   const handleViewDetails = async (user: UserData) => {
     setSelectedUser(user);
     setIsDetailsOpen(true);
-    if (user.kyc_status !== "not_started") {
-      await fetchKycDetails(user.id);
-    } else {
-      setKycDetails(null);
-    }
     await fetchFullUserDetails(user.id);
+    // KYC details will be fetched automatically by React Query when selectedUser changes
   };
 
   const updateKycStatus = async (
@@ -336,7 +371,8 @@ const Admin = () => {
       toast.success(
         `User KYC ${status === "verified" ? "approved" : "rejected"}`
       );
-      fetchUsers();
+      refetchUsers();
+      refetchKycDetails(); // Refetch KYC details after status update
       setIsDetailsOpen(false);
     } catch (error: any) {
       toast.error("Failed to update status: " + error.message);
@@ -346,8 +382,7 @@ const Admin = () => {
   const handleLogout = async () => {
     // Clear admin session from localStorage
     localStorage.removeItem("admin_session");
-    await logout();
-    navigate("/admin");
+    await logout("/admin");
   };
 
   if (isLoading) {
@@ -377,7 +412,7 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-4">
+          <TabsList className="grid w-full max-w-2xl grid-cols-6">
             <TabsTrigger value="users">
               <User className="w-4 h-4 mr-2" />
               Users & KYC
@@ -418,7 +453,7 @@ const Admin = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => fetchUsers(false)}
+                    onClick={handleRefreshUsers}
                     disabled={isRefreshing}
                   >
                     <RefreshCw

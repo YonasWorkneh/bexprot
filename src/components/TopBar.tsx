@@ -15,18 +15,51 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GlobalSearch from "./GlobalSearch";
 import WalletConnectModal from "./WalletConnectModal";
-import { formatBalance, formatAddress, getNetworkName } from "@/lib/walletUtils";
+import {
+  formatBalance,
+  formatAddress,
+  getNetworkName,
+} from "@/lib/walletUtils";
+import { useQuery } from "@tanstack/react-query";
+import { getAllUserWallets, formatUSDT } from "@/lib/usdtWalletUtils";
 
 const TopBar = () => {
-  const balance = useTradingStore((state) => state.balance);
-  console.log('balance', balance);
   const { user, logout, isAuthenticated } = useAuthStore();
-  const { walletAddress, balanceUSD, nativeBalance, chainId, walletType, disconnectWallet } = useWalletStore();
+  const {
+    walletAddress,
+    balanceUSD,
+    nativeBalance,
+    chainId,
+    walletType,
+    disconnectWallet,
+  } = useWalletStore();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+
+  // Fetch wallets and calculate total balance
+  const {
+    data: wallets = [],
+    isLoading: isLoadingWallets,
+    isRefetching: isRefreshingWallets,
+    refetch: refetchWallets,
+  } = useQuery({
+    queryKey: ["topbar-wallets", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      return await getAllUserWallets(user.id);
+    },
+    enabled: !!user?.id && isAuthenticated,
+    staleTime: 1000 * 5, // 5 seconds stale time
+    refetchInterval: 10000, // Auto-refetch every 10 seconds
+    retry: 2,
+  });
+
+  // Calculate total balance from all network wallets
+  const totalWalletBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
 
   const handleLogout = async () => {
     await logout();
@@ -55,14 +88,17 @@ const TopBar = () => {
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-xs text-muted-foreground">
-                  {walletType === 'solana' ? 'Solana' : getNetworkName(chainId || 1)}
+                  {walletType === "solana"
+                    ? "Solana"
+                    : getNetworkName(chainId || 1)}
                 </span>
               </div>
               <div className="h-4 w-px bg-border" />
               <div className="flex items-center gap-2">
                 <Wallet size={14} className="text-muted-foreground" />
                 <span className="font-mono text-sm font-medium">
-                  {formatBalance(nativeBalance, 4)} {walletType === 'solana' ? 'SOL' : 'ETH'}
+                  {formatBalance(nativeBalance, 4)}{" "}
+                  {walletType === "solana" ? "SOL" : "ETH"}
                 </span>
               </div>
               <div className="h-4 w-px bg-border" />
@@ -104,7 +140,7 @@ const TopBar = () => {
                   </div>
                 )}
                 <span className="text-sm font-medium text-foreground hidden md:block">
-                  {user?.name?.split(' ')[0] || 'User'}
+                  {user?.name?.split(" ")[0] || "User"}
                 </span>
               </div>
 
@@ -115,17 +151,39 @@ const TopBar = () => {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2 cursor-help">
-                          <span className="text-muted-foreground">Balance:</span>
+                          <span className="text-muted-foreground">
+                            Balance:
+                          </span>
                           <span className="font-mono font-bold text-foreground">
-                            ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {formatUSDT(totalWalletBalance)}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
                         <div className="flex flex-col gap-1">
-                          <p className="font-semibold text-xs">Balance Breakdown:</p>
-                          <p>Internal (Deposited): <span className="font-mono text-green-400">${useTradingStore.getState().liveBalance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}</span></p>
-                          <p>External Wallet: <span className="font-mono text-blue-400">${useTradingStore.getState().externalBalance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}</span></p>
+                          <p className="font-semibold text-xs">
+                            Balance Breakdown:
+                          </p>
+                          {wallets.length > 0 ? (
+                            wallets.map((wallet) => (
+                              <p key={wallet.id}>
+                                {wallet.network}:{" "}
+                                <span className="font-mono text-green-400">
+                                  {formatUSDT(wallet.balance)}
+                                </span>
+                              </p>
+                            ))
+                          ) : (
+                            <p className="text-muted-foreground text-xs">
+                              No wallets found
+                            </p>
+                          )}
+                          <p className="mt-1 pt-1 border-t border-border">
+                            <span className="font-semibold">Total: </span>
+                            <span className="font-mono text-primary">
+                              {formatUSDT(totalWalletBalance)}
+                            </span>
+                          </p>
                         </div>
                       </TooltipContent>
                     </Tooltip>
@@ -135,19 +193,27 @@ const TopBar = () => {
                     size="icon"
                     className="h-6 w-6 rounded-full hover:bg-muted"
                     onClick={async () => {
-                      toast({ title: "Refreshing..." });
-                      await useTradingStore.getState().fetchData();
-                      await useWalletStore.getState().fetchBalance();
-                      const newBalance = useTradingStore.getState().balance;
-                      const isDemo = useTradingStore.getState().isDemo;
+                      toast({ title: "Refreshing balance..." });
+                      const { data: refreshedWallets = [] } =
+                        await refetchWallets();
+                      const refreshedTotal = refreshedWallets.reduce(
+                        (sum, w) => sum + w.balance,
+                        0
+                      );
                       toast({
                         title: "Balance Refreshed",
-                        description: `Current ${isDemo ? 'Demo ' : ''}Balance: $${newBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        description: `Total Balance: ${formatUSDT(
+                          refreshedTotal
+                        )}`,
                       });
                     }}
                     title="Refresh Balance"
+                    disabled={isRefreshingWallets}
                   >
-                    <RefreshCw size={12} className={useTradingStore((state) => state.isLoading) ? "animate-spin" : ""} />
+                    <RefreshCw
+                      size={12}
+                      className={isRefreshingWallets ? "animate-spin" : ""}
+                    />
                   </Button>
                 </div>
               </div>
@@ -163,7 +229,7 @@ const TopBar = () => {
                 onClick={() => navigate("/notifications")}
               >
                 <Bell size={18} />
-                {useNotificationStore((state) => state.unreadCount) > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                 )}
               </Button>
@@ -188,7 +254,7 @@ const TopBar = () => {
             </Button>
           )}
         </div>
-      </div >
+      </div>
 
       <GlobalSearch
         open={searchOpen}
