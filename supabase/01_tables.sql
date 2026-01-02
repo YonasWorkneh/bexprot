@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     phone TEXT,
     kyc_status TEXT DEFAULT 'not_started' CHECK (kyc_status IN ('not_started', 'pending', 'verified', 'rejected')),
     role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    trading_balance NUMERIC DEFAULT 0,
     preferences JSONB DEFAULT '{}'::JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -170,7 +171,33 @@ CREATE TABLE IF NOT EXISTS public.trades (
     price NUMERIC NOT NULL,
     type TEXT CHECK (type IN ('buy', 'sell')),
     is_demo BOOLEAN DEFAULT FALSE,
-    timestamp TIMESTAMPTZ DEFAULT NOW()
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    -- Contract-specific fields (nullable for spot trades)
+    exit_price NUMERIC,
+    payout NUMERIC,
+    profit NUMERIC,
+    status TEXT CHECK (status IN ('open', 'win', 'loss', 'tie')),
+    open_time TIMESTAMPTZ,
+    close_time TIMESTAMPTZ,
+    contract_data JSONB
+);
+
+-- Active Contracts (for ongoing contracts)
+CREATE TABLE IF NOT EXISTS public.active_contracts (
+    id TEXT PRIMARY KEY,
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    asset_id TEXT NOT NULL,
+    asset_name TEXT NOT NULL,
+    side TEXT CHECK (side IN ('buy', 'sell')) NOT NULL,
+    entry_price NUMERIC NOT NULL,
+    amount NUMERIC NOT NULL,
+    total NUMERIC NOT NULL,
+    payout NUMERIC NOT NULL,
+    expires_at BIGINT NOT NULL,
+    opened_at BIGINT NOT NULL,
+    status TEXT DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+    is_demo BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.orders (

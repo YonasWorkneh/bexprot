@@ -113,14 +113,34 @@ const Admin = () => {
       }
       return (data || []) as UserData[];
     },
-    enabled: !!user && user.role === "admin",
-    staleTime: 1000 * 15, // 15 seconds stale time
-    refetchInterval: 30000, // Auto-refetch every 30 seconds
+    enabled: () => {
+      // Enable query if user is admin OR if there's a valid admin session in localStorage
+      if (user && user.role === "admin") {
+        return true;
+      }
+      // Check localStorage for admin session (for early query enablement)
+      try {
+        const adminSession = localStorage.getItem("admin_session");
+        if (adminSession) {
+          const session = JSON.parse(adminSession);
+          return session.expiresAt > Date.now();
+        }
+      } catch (e) {
+        // Invalid session
+      }
+      return false;
+    },
+    staleTime: 1000 * 5, // 5 seconds stale time
+    refetchInterval: 10000, // Auto-refetch every 10 seconds
     retry: 2,
   });
 
   useEffect(() => {
     checkAdminAuth();
+    // When user becomes available and is admin, ensure users are fetched
+    if (user && user.role === "admin") {
+      refetchUsers();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -240,29 +260,96 @@ const Admin = () => {
       return;
     }
 
+    const amountNum = Number(adjustAmount);
+    if (amountNum <= 0) {
+      toast.error("Amount must be greater than 0");
+      return;
+    }
+
     try {
-      const { data, error } = await supabase.rpc("admin_adjust_balance", {
-        target_user_id: userId,
-        amount: Number(adjustAmount),
-        adjustment_type: adjustType,
-        description: "Admin adjustment",
+      // Get the user's USDT wallet (first wallet, ordered by created_at)
+      const { data: usdtWallets, error: fetchError } = await supabase
+        .from("usdt_wallets")
+        .select("id, balance")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      console.log("usdtWallets", usdtWallets);
+
+      if (fetchError) throw fetchError;
+
+      let walletId: string;
+      let currentBalance: number;
+
+      if (usdtWallets && usdtWallets.length > 0) {
+        // Use existing wallet
+        walletId = usdtWallets[0].id;
+        currentBalance = Number(usdtWallets[0].balance || 0);
+      } else {
+        // Create a new USDT wallet if none exists
+        const { data: newWallet, error: createError } = await supabase
+          .from("usdt_wallets")
+          .insert({
+            user_id: userId,
+            network: "USDT_TRC20",
+            address: `admin_created_${userId}_${Date.now()}`,
+            balance: 0,
+          })
+          .select("id, balance")
+          .single();
+
+        if (createError) throw createError;
+        walletId = newWallet.id;
+        currentBalance = 0;
+      }
+
+      // Calculate new balance based on credit/debit
+      const newBalance =
+        adjustType === "credit"
+          ? currentBalance + amountNum
+          : currentBalance - amountNum;
+
+      // Prevent negative balance on debit
+      if (adjustType === "debit" && newBalance < 0) {
+        toast.error(
+          `Insufficient balance. Current balance: $${currentBalance.toFixed(2)}`
+        );
+        return;
+      }
+
+      // Update wallet balance directly in usdt_wallets table
+      const { error: updateError } = await supabase
+        .from("usdt_wallets")
+        .update({
+          balance: newBalance,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", walletId);
+
+      if (updateError) throw updateError;
+
+      // Create transaction record for audit trail
+      await supabase.from("wallet_transactions").insert({
+        user_id: userId,
+        type: adjustType === "credit" ? "deposit" : "withdrawal",
+        amount: adjustType === "credit" ? amountNum : -amountNum,
+        asset: "USDT",
+        status: "completed",
+        timestamp: new Date().toISOString(),
       });
 
-      if (error) throw error;
-
-      if (data.success) {
-        toast.success(
-          `Successfully ${
-            adjustType === "credit" ? "credited" : "debited"
-          } $${adjustAmount}`
-        );
-        setAdjustAmount("");
-        fetchFullUserDetails(userId); // Refresh details
-      } else {
-        toast.error(data.error || "Adjustment failed");
-      }
-    } catch (error: any) {
-      toast.error("Failed to adjust balance: " + error.message);
+      toast.success(
+        `Successfully ${
+          adjustType === "credit" ? "credited" : "debited"
+        } $${amountNum.toFixed(2)}. New balance: $${newBalance.toFixed(2)}`
+      );
+      setAdjustAmount("");
+      fetchFullUserDetails(userId); // Refresh details
+      refetchUsers(); // Refresh user list
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to adjust balance";
+      toast.error("Failed to adjust balance: " + errorMessage);
     }
   };
 
@@ -834,57 +921,99 @@ const Admin = () => {
                   <div className="space-y-6">
                     <div>
                       <h3 className="font-semibold mb-3 flex items-center gap-2">
-                        <Coins className="w-4 h-4 text-primary" />
-                        Open Orders
+                        <FileText className="w-4 h-4 text-primary" />
+                        History
                       </h3>
                       <div className="rounded-md border overflow-hidden">
                         <Table>
                           <TableHeader className="bg-muted/50">
                             <TableRow>
                               <TableHead>Asset</TableHead>
-                              <TableHead>Side</TableHead>
-                              <TableHead>Amount</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Quantity</TableHead>
                               <TableHead>Price</TableHead>
                               <TableHead>Status</TableHead>
+                              <TableHead>Profit</TableHead>
+                              <TableHead>Date</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {userDetails?.orders?.map((order: any) => (
-                              <TableRow key={order.id}>
+                            {userDetails?.trades?.map((trade: any) => (
+                              <TableRow key={trade.id}>
                                 <TableCell className="font-medium">
-                                  {order.asset_name}
+                                  {trade.asset?.toUpperCase() || "N/A"}
                                 </TableCell>
                                 <TableCell>
                                   <Badge
                                     variant={
-                                      order.side === "buy"
+                                      trade.type === "buy"
                                         ? "default"
                                         : "destructive"
                                     }
                                     className="capitalize"
                                   >
-                                    {order.side}
+                                    {trade.type}
                                   </Badge>
                                 </TableCell>
-                                <TableCell>{order.amount}</TableCell>
-                                <TableCell>${order.price}</TableCell>
+                                <TableCell>{trade.quantity || 0}</TableCell>
+                                <TableCell>${trade.price || 0}</TableCell>
                                 <TableCell>
-                                  <Badge
-                                    variant="outline"
-                                    className="capitalize"
-                                  >
-                                    {order.status}
-                                  </Badge>
+                                  {trade.status ? (
+                                    <Badge
+                                      variant={
+                                        trade.status === "win"
+                                          ? "default"
+                                          : trade.status === "loss"
+                                          ? "destructive"
+                                          : trade.status === "open"
+                                          ? "secondary"
+                                          : "outline"
+                                      }
+                                      className="capitalize"
+                                    >
+                                      {trade.status}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline">Completed</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {trade.profit !== null &&
+                                  trade.profit !== undefined ? (
+                                    <span
+                                      className={
+                                        trade.profit >= 0
+                                          ? "text-green-500"
+                                          : "text-red-500"
+                                      }
+                                    >
+                                      {trade.profit >= 0 ? "+" : ""}$
+                                      {Number(trade.profit).toFixed(2)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground">
+                                      -
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {trade.timestamp
+                                    ? new Date(trade.timestamp).toLocaleString()
+                                    : trade.created_at
+                                    ? new Date(
+                                        trade.created_at
+                                      ).toLocaleString()
+                                    : "N/A"}
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {!userDetails?.orders?.length && (
+                            {!userDetails?.trades?.length && (
                               <TableRow>
                                 <TableCell
-                                  colSpan={5}
+                                  colSpan={7}
                                   className="text-center py-4 text-muted-foreground"
                                 >
-                                  No open orders
+                                  No trade history
                                 </TableCell>
                               </TableRow>
                             )}

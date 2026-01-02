@@ -83,7 +83,7 @@ const CryptoDepositDialog = ({
           value={selectedCrypto}
           onValueChange={(v) => setSelectedCrypto(v as CryptoCurrency)}
         >
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-6">
             {Object.keys(DEPOSIT_ADDRESSES).map((currency) => (
               <TabsTrigger
                 key={currency}

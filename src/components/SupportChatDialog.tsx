@@ -369,36 +369,50 @@ const SupportChatDialog = ({ open, onOpenChange }: SupportChatDialogProps) => {
 
                   <div>
                     <Label htmlFor="image">Attach Screenshot (Optional)</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="image"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) =>
-                          setImageFile(e.target.files?.[0] || null)
-                        }
-                        className="hidden"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          document.getElementById("image")?.click()
-                        }
-                        className="w-full"
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        {imageFile ? imageFile.name : "Upload Image"}
-                      </Button>
-                      {imageFile && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="image"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) =>
+                            setImageFile(e.target.files?.[0] || null)
+                          }
+                          className="hidden"
+                        />
                         <Button
                           type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setImageFile(null)}
+                          variant="outline"
+                          onClick={() =>
+                            document.getElementById("image")?.click()
+                          }
+                          className="flex-1"
                         >
-                          <X className="h-4 w-4" />
+                          <Upload className="mr-2 h-4 w-4" />
+                          {imageFile ? "Change Image" : "Upload Image"}
                         </Button>
+                        {imageFile && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setImageFile(null)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {imageFile && (
+                        <div className="relative inline-block">
+                          <img
+                            src={URL.createObjectURL(imageFile)}
+                            alt="Preview"
+                            className="rounded-lg max-w-xs max-h-32 object-contain border border-border"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1 truncate max-w-xs">
+                            {imageFile.name}
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -449,11 +463,14 @@ const SupportChatDialog = ({ open, onOpenChange }: SupportChatDialogProps) => {
                           {msg.message}
                         </p>
                         {msg.image_url && (
-                          <img
-                            src={msg.image_url}
-                            alt="Attachment"
-                            className="mt-2 rounded max-w-full"
-                          />
+                          <div className="mt-2">
+                            <img
+                              src={msg.image_url}
+                              alt="Attachment"
+                              className="rounded-lg max-w-full max-h-64 object-contain cursor-pointer border border-border/50 hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(msg.image_url, "_blank")}
+                            />
+                          </div>
                         )}
                         <p className="text-xs opacity-70 mt-1">
                           {new Date(msg.created_at).toLocaleTimeString()}
@@ -466,17 +483,24 @@ const SupportChatDialog = ({ open, onOpenChange }: SupportChatDialogProps) => {
               </ScrollArea>
               <div className="p-6 pt-4 border-t space-y-2">
                 {chatImageFile && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{chatImageFile.name}</span>
+                  <div className="relative inline-block">
+                    <img
+                      src={URL.createObjectURL(chatImageFile)}
+                      alt="Preview"
+                      className="rounded-lg max-w-xs max-h-32 object-contain border border-border"
+                    />
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
+                      className="absolute -top-2 -right-2 h-6 w-6 bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full"
                       onClick={() => setChatImageFile(null)}
                     >
                       <X className="h-3 w-3" />
                     </Button>
+                    <p className="text-xs text-muted-foreground mt-1 truncate max-w-xs">
+                      {chatImageFile.name}
+                    </p>
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -496,6 +520,7 @@ const SupportChatDialog = ({ open, onOpenChange }: SupportChatDialogProps) => {
                     onClick={() =>
                       document.getElementById("chat-image")?.click()
                     }
+                    title="Upload image"
                   >
                     <Upload className="h-4 w-4" />
                   </Button>
@@ -509,11 +534,11 @@ const SupportChatDialog = ({ open, onOpenChange }: SupportChatDialogProps) => {
                         handleSendMessage();
                       }
                     }}
-                    className="focus-visible:ring-green-500/10 focus-visible:ring-offset-0 focus-visible:ring-1"
+                    className="flex-1 focus-visible:ring-green-500/10 focus-visible:ring-offset-0 focus-visible:ring-1"
                   />
                   <Button
                     onClick={handleSendMessage}
-                    disabled={sending || !newMessage.trim()}
+                    disabled={sending || (!newMessage.trim() && !chatImageFile)}
                   >
                     {sending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

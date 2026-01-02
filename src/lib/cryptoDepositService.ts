@@ -116,16 +116,16 @@ export async function reportDeposit(
   try {
     // Check if transaction hash already exists (skip check for placeholder hashes)
     if (transactionHash && !transactionHash.startsWith('pending_')) {
-      const { data: existing } = await supabase
-        .from('crypto_deposits')
-        .select('id')
-        .eq('transaction_hash', transactionHash)
-        .maybeSingle();
+    const { data: existing } = await supabase
+      .from('crypto_deposits')
+      .select('id')
+      .eq('transaction_hash', transactionHash)
+      .maybeSingle();
 
-      console.log('[Deposit Service] Duplicate check result:', existing ? 'DUPLICATE FOUND' : 'NO DUPLICATE');
-      if (existing) {
-        console.error('[Deposit Service] Transaction hash already exists:', transactionHash);
-        return { success: false, error: 'This transaction has already been reported' };
+    console.log('[Deposit Service] Duplicate check result:', existing ? 'DUPLICATE FOUND' : 'NO DUPLICATE');
+    if (existing) {
+      console.error('[Deposit Service] Transaction hash already exists:', transactionHash);
+      return { success: false, error: 'This transaction has already been reported' };
       }
     }
 

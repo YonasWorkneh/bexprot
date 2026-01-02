@@ -593,7 +593,7 @@ const Auth = () => {
               </div>
             )}
 
-            <p>🔒 All data is stored securely on our backend</p>
+            <p className="text-xs text-muted-foreground text-center pt-2">🔒 All data is stored securely on our backend</p>
           </div>
         </div>
       </div>

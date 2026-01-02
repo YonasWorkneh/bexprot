@@ -30,26 +30,12 @@ export const NETWORKS = {
     fee: 1,
     address: DEPOSIT_ADDRESSES.USDT_TRC20.address,
   },
-  SOL: {
-    name: "Solana",
-    symbol: "SOL",
-    decimals: 9,
-    fee: 0.000005,
-    address: DEPOSIT_ADDRESSES.SOL.address,
-  },
   XRP: {
     name: "XRP Ledger",
     symbol: "XRP",
     decimals: 6,
     fee: 0.00001,
     address: DEPOSIT_ADDRESSES.XRP.address,
-  },
-  LTC: {
-    name: "Litecoin",
-    symbol: "LTC",
-    decimals: 8,
-    fee: 0.001,
-    address: DEPOSIT_ADDRESSES.LTC.address,
   },
   BNB: {
     name: "BNB Smart Chain",
@@ -178,9 +164,7 @@ export function validateAddress(address: string, network: string): boolean {
   const patterns: Record<Network, RegExp> = {
     BTC: /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/,
     USDT_TRC20: /^T[a-zA-Z0-9]{33}$/,
-    SOL: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
     XRP: /^r[a-zA-Z0-9]{24,34}$/,
-    LTC: /^(ltc1|[LM3])[a-zA-Z0-9]{26,42}$/,
     BNB: /^0x[a-fA-F0-9]{40}$/,
     ETH: /^0x[a-fA-F0-9]{40}$/,
     USDC_ERC20: /^0x[a-fA-F0-9]{40}$/,
@@ -278,6 +262,7 @@ export async function createUSDTWallet(
 
 /**
  * Get credited deposits from crypto_deposits table
+ * NOTE: USDT deposits are excluded - they are handled separately in usdt_wallets table
  */
 export async function getCreditedDeposits(
   userId: string
@@ -288,6 +273,8 @@ export async function getCreditedDeposits(
       .select("*")
       .eq("user_id", userId)
       .eq("status", "credited")
+      // Exclude USDT deposits - they are moved to usdt_wallets when approved
+      .not("currency", "in", "('USDT', 'USDT_TRC20')")
       .order("credited_at", { ascending: false });
 
     if (error) throw error;
@@ -344,20 +331,22 @@ export async function getUserWallets(userId: string): Promise<USDTWallet[]> {
 
 /**
  * Get all user wallets including credited deposits
+ * NOTE: USDT wallets come ONLY from usdt_wallets table (not merged with crypto_deposits)
+ * Other currencies (BTC, ETH, etc.) come from crypto_deposits with status 'credited'
  */
 export async function getAllUserWallets(userId: string): Promise<USDTWallet[]> {
   try {
-    // Fetch both regular wallets and credited deposits
+    // Fetch both regular wallets (includes USDT from usdt_wallets) and credited deposits (non-USDT)
     const [regularWallets, depositWallets] = await Promise.all([
-      getUserWallets(userId),
-      getCreditedDeposits(userId),
+      getUserWallets(userId), // This fetches from usdt_wallets table (includes USDT)
+      getCreditedDeposits(userId), // This fetches from crypto_deposits (excludes USDT)
     ]);
 
     // Combine and deduplicate by network
     // If both exist for same network, prefer the one with higher balance
     const walletsByNetwork = new Map<string, USDTWallet>();
 
-    // Add regular wallets first
+    // Add regular wallets first (includes USDT from usdt_wallets)
     regularWallets.forEach((wallet) => {
       const normalizedNetwork = wallet.network.toUpperCase();
       const existing = walletsByNetwork.get(normalizedNetwork);
@@ -366,7 +355,7 @@ export async function getAllUserWallets(userId: string): Promise<USDTWallet[]> {
       }
     });
 
-    // Add deposit wallets, merging balances if network already exists
+    // Add deposit wallets (non-USDT currencies only), merging balances if network already exists
     depositWallets.forEach((depositWallet) => {
       const normalizedNetwork = depositWallet.network.toUpperCase();
       const existing = walletsByNetwork.get(normalizedNetwork);

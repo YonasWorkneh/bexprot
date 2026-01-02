@@ -235,8 +235,8 @@ const AdminSupportPanel = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[600px]">
             {/* Tickets List */}
-            <div className="lg:col-span-1 border rounded-lg">
-              <ScrollArea className="h-full">
+            <div className="lg:col-span-1 border rounded-lg overflow-hidden flex flex-col">
+              <ScrollArea className="flex-1 overflow-hidden">
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -371,14 +371,16 @@ const AdminSupportPanel = () => {
                               {msg.message}
                             </p>
                             {msg.image_url && (
-                              <img
-                                src={msg.image_url}
-                                alt="Attachment"
-                                className="mt-2 rounded max-w-full cursor-pointer"
-                                onClick={() =>
-                                  window.open(msg.image_url, "_blank")
-                                }
-                              />
+                              <div className="mt-2">
+                                <img
+                                  src={msg.image_url}
+                                  alt="Attachment"
+                                  className="rounded-lg max-w-full max-h-64 object-contain cursor-pointer border border-border/50 hover:opacity-90 transition-opacity"
+                                  onClick={() =>
+                                    window.open(msg.image_url, "_blank")
+                                  }
+                                />
+                              </div>
                             )}
                             <p className="text-xs opacity-70 mt-1">
                               {new Date(msg.created_at).toLocaleTimeString()}
@@ -394,17 +396,24 @@ const AdminSupportPanel = () => {
                   {/* Reply Form */}
                   <div className="p-4 border-t space-y-2 shrink-0">
                     {imageFile && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>{imageFile.name}</span>
+                      <div className="relative inline-block">
+                        <img
+                          src={URL.createObjectURL(imageFile)}
+                          alt="Preview"
+                          className="rounded-lg max-w-xs max-h-32 object-contain border border-border"
+                        />
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
+                          className="absolute -top-2 -right-2 h-6 w-6 bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full"
                           onClick={() => setImageFile(null)}
                         >
                           <X className="h-3 w-3" />
                         </Button>
+                        <p className="text-xs text-muted-foreground mt-1 truncate max-w-xs">
+                          {imageFile.name}
+                        </p>
                       </div>
                     )}
                     <div className="flex gap-2">
@@ -424,6 +433,7 @@ const AdminSupportPanel = () => {
                         onClick={() =>
                           document.getElementById("admin-reply-image")?.click()
                         }
+                        title="Upload image"
                       >
                         <Upload className="h-4 w-4" />
                       </Button>
@@ -432,11 +442,17 @@ const AdminSupportPanel = () => {
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
                         rows={3}
-                        className="resize-none"
+                        className="resize-none flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && e.ctrlKey) {
+                            e.preventDefault();
+                            handleSendReply();
+                          }
+                        }}
                       />
                       <Button
                         onClick={handleSendReply}
-                        disabled={sending || !replyMessage.trim()}
+                        disabled={sending || (!replyMessage.trim() && !imageFile)}
                       >
                         {sending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />

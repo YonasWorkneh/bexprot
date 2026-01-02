@@ -55,14 +55,6 @@ export const DEPOSIT_ADDRESSES = {
     minDeposit: 10,
     explorerUrl: "https://tronscan.org/#/address/",
   },
-  SOL: {
-    currency: "SOL",
-    address: "BNThwmdcs7JTSuRDrNhrEtPRuXHbKpywawj8JKPSBX6j",
-    network: "Solana",
-    networkSymbol: "SOL",
-    minDeposit: 0.01,
-    explorerUrl: "https://explorer.solana.com/address/",
-  },
   XRP: {
     currency: "XRP",
     address: "rfQxrooWfucovtY7ByYVb7C8T96ne6GPi",
@@ -70,14 +62,6 @@ export const DEPOSIT_ADDRESSES = {
     networkSymbol: "XRP",
     minDeposit: 10,
     explorerUrl: "https://xrpscan.com/account/",
-  },
-  LTC: {
-    currency: "LTC",
-    address: "ltc1qeug4ljja4wxyn8f6v7zggjnjd5s4e5c6qv6tql",
-    network: "Litecoin",
-    networkSymbol: "LTC",
-    minDeposit: 0.01,
-    explorerUrl: "https://blockchair.com/litecoin/address/",
   },
   BNB: {
     currency: "BNB",

@@ -31,6 +31,22 @@ This creates all database tables:
 - `notifications` - User notifications
 - `crypto_deposit_addresses` - System deposit addresses
 
+### 1.1.1 Contract Trading Migration (Required for Contract Trading)
+
+```bash
+File: supabase/20_add_contract_fields_to_trades.sql
+```
+
+**IMPORTANT**: If you're using contract trading functionality, you MUST run this migration after `01_tables.sql`. This adds contract-specific fields to the `trades` table:
+
+- `exit_price`, `payout`, `profit` - Contract outcome fields
+- `status` - Contract status (open/win/loss/tie)
+- `open_time`, `close_time` - Contract timing
+- `contract_data` - JSONB field for contract metadata
+- `active_contracts` table - For tracking ongoing contracts
+
+**Note**: This migration is idempotent - it checks if columns exist before adding them, so it's safe to run multiple times.
+
 ### 1.2 Row Level Security Policies
 
 ```bash

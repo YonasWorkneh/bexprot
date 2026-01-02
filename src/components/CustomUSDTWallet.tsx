@@ -23,6 +23,7 @@ import {
   TrendingUp,
   AlertTriangle,
   DollarSign,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTradingStore } from "@/store/tradingStore";
@@ -42,6 +43,7 @@ import USDTSendDialog from "./USDTSendDialog";
 import USDTReceiveDialog from "./USDTReceiveDialog";
 import USDTDepositDialog from "./USDTDepositDialog";
 import USDTWithdrawDialog from "./USDTWithdrawDialog";
+import USDTTransferDialog from "./USDTTransferDialog";
 import USDTTransactionHistory from "./USDTTransactionHistory";
 import RealDepositDialog from "./RealDepositDialog";
 import SwapModal from "./SwapModal";
@@ -64,6 +66,7 @@ const CustomUSDTWallet = () => {
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [realDepositDialogOpen, setRealDepositDialogOpen] = useState(false);
   const [cryptoDepositDialogOpen, setCryptoDepositDialogOpen] = useState(false);
 
@@ -91,9 +94,7 @@ const CustomUSDTWallet = () => {
         const networks: Network[] = [
           "BTC",
           "USDT_TRC20",
-          "SOL",
           "XRP",
-          "LTC",
           "BNB",
           "ETH",
           "USDC_ERC20",
@@ -250,7 +251,7 @@ const CustomUSDTWallet = () => {
           </div>
 
           {/* Quick Actions */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <SwapModal />
             <Button
               onClick={() => setCryptoDepositDialogOpen(true)}
@@ -258,6 +259,13 @@ const CustomUSDTWallet = () => {
             >
               <ArrowDownCircle className="mr-2 h-4 w-4" />
               Deposit Crypto
+            </Button>
+            <Button
+              onClick={() => setTransferDialogOpen(true)}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 text-white"
+            >
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              Transfer
             </Button>
             <Button
               onClick={() =>
@@ -426,6 +434,17 @@ const CustomUSDTWallet = () => {
           />
         </>
       )}
+
+      {/* Transfer Dialog - doesn't require a specific wallet */}
+      <USDTTransferDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        totalWalletBalance={totalBalance}
+        onSuccess={() => {
+          loadWallets();
+          fetchData();
+        }}
+      />
 
       {/* User Deposit History (Unified View) */}
       <Card>

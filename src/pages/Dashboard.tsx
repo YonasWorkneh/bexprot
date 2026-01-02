@@ -176,7 +176,7 @@ const Dashboard = () => {
                 Favorite Chart
               </h2>
               <div className="flex items-center gap-3">
-                <div className="text-sm text-muted-foreground">BTC/USD</div>
+            <div className="text-sm text-muted-foreground">BTC/USD</div>
               </div>
             </div>
             {/* Favorite Interval Filters */}

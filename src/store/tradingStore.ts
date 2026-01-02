@@ -3,9 +3,17 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore as useAuthStoreHook } from "./authStore";
 import { useNotificationStore } from "./notificationStore";
 import { getTotalBalance, getUserWallets } from "@/lib/usdtWalletUtils";
-import { getSystemSettings, type SystemSettings, DEFAULT_SETTINGS } from "@/lib/adminSettings";
+import {
+  getSystemSettings,
+  type SystemSettings,
+  DEFAULT_SETTINGS,
+} from "@/lib/adminSettings";
 import { toast } from "sonner";
-import { getBalanceWithFallback, setCachedBalance, updateSnapshotInDB } from "@/lib/balanceSnapshot";
+import {
+  getBalanceWithFallback,
+  setCachedBalance,
+  updateSnapshotInDB,
+} from "@/lib/balanceSnapshot";
 
 export type OrderType = "market" | "limit";
 export type OrderSide = "buy" | "sell";
@@ -49,7 +57,7 @@ export interface Position {
   expiresAt?: number; // For contracts
   payout?: number; // For contracts (e.g., 85%)
   initialInvestment?: number; // For contracts
-  finalResult?: 'win' | 'loss'; // For completed contracts
+  finalResult?: "win" | "loss"; // For completed contracts
   finalProfit?: number; // For completed contracts
   stopLoss?: number;
   takeProfit?: number;
@@ -60,8 +68,8 @@ export interface WithdrawalHistory {
   amount: number;
   toAddress?: string;
   timestamp: number;
-  status: 'pending' | 'completed' | 'failed';
-  type: 'wallet' | 'bank';
+  status: "pending" | "completed" | "failed";
+  type: "wallet" | "bank";
 }
 
 interface TradingState {
@@ -105,13 +113,24 @@ interface TradingState {
   fetchData: (showLoading?: boolean) => Promise<void>;
   subscribeToChanges: () => () => void;
 
-  placeOrder: (order: Omit<Order, "id" | "timestamp" | "status"> & { mode?: TradingMode, contractTime?: number, payout?: number, stopLoss?: number, takeProfit?: number }) => Promise<{ success: boolean; error?: string }>;
+  placeOrder: (
+    order: Omit<Order, "id" | "timestamp" | "status"> & {
+      mode?: TradingMode;
+      contractTime?: number;
+      payout?: number;
+      stopLoss?: number;
+      takeProfit?: number;
+    }
+  ) => Promise<{ success: boolean; error?: string }>;
   cancelOrder: (orderId: string) => Promise<void>;
   closePosition: (positionId: string) => Promise<void>;
   updatePositionPrices: (assetId: string, currentPrice: number) => void;
   checkContractExpirations: () => void;
   syncWithWalletBalance: (walletBalance: number) => void;
-  withdrawToWallet: (amount: number, walletAddress?: string) => Promise<{ success: boolean; error?: string }>;
+  withdrawToWallet: (
+    amount: number,
+    walletAddress?: string
+  ) => Promise<{ success: boolean; error?: string }>;
   depositFromWallet: (amount: number) => void;
   fetchUSDTBalance: () => Promise<void>;
 }
@@ -152,7 +171,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     // Equity = Balance + Sum(Position Value)
     // Position Value = Initial Investment + PnL
     const positionsValue = positions.reduce((sum, pos) => {
-      const investment = pos.initialInvestment || (pos.amount * pos.entryPrice);
+      const investment = pos.initialInvestment || pos.amount * pos.entryPrice;
       return sum + investment + pos.pnl;
     }, 0);
     return balance + positionsValue;
@@ -165,16 +184,18 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
 
   getTotalTrades: () => {
     const { orderHistory } = get();
-    return orderHistory.filter(o => o.status === "filled").length;
+    return orderHistory.filter((o) => o.status === "filled").length;
   },
 
   getWinRate: () => {
     const { positions, orderHistory } = get();
-    const totalTrades = orderHistory.filter(o => o.status === "filled").length;
+    const totalTrades = orderHistory.filter(
+      (o) => o.status === "filled"
+    ).length;
     if (totalTrades === 0) return 0;
 
-    const winningTrades = positions.filter(p => p.pnl > 0).length;
-    const completedWinningTrades = orderHistory.filter(o => {
+    const winningTrades = positions.filter((p) => p.pnl > 0).length;
+    const completedWinningTrades = orderHistory.filter((o) => {
       // Logic for historical win rate might need adjustment for contracts
       // For now, assuming positive total means win
       return o.total > 0; // Simplified
@@ -196,13 +217,13 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     try {
       const user = useAuthStoreHook.getState().user;
       if (!user) {
-        console.log('[fetchUSDTBalance] No user found');
+        console.log("[fetchUSDTBalance] No user found");
         return;
       }
 
       const performLiveUpdate = async () => {
         const liveBalance = await getTotalBalance(user.id);
-        console.log('[fetchUSDTBalance] Live DB balance:', liveBalance);
+        console.log("[fetchUSDTBalance] Live DB balance:", liveBalance);
 
         // Always update cache/snapshot with fresh data
         setCachedBalance(user.id, liveBalance);
@@ -213,7 +234,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           if (!state.isDemo) {
             return {
               liveBalance: liveBalance,
-              balance: liveBalance + externalBalance
+              balance: liveBalance + externalBalance,
             };
           }
           return { liveBalance: liveBalance };
@@ -222,7 +243,9 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       };
 
       if (forceLive) {
-        console.log('[fetchUSDTBalance] Forcing live update (bypassing cache)...');
+        console.log(
+          "[fetchUSDTBalance] Forcing live update (bypassing cache)..."
+        );
         await performLiveUpdate();
       } else {
         // Use fallback chain (Cache -> Snapshot -> Live)
@@ -233,13 +256,16 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             return liveBalance;
           },
           (freshBalance) => {
-            console.log('[fetchUSDTBalance] Received fresh balance update:', freshBalance);
+            console.log(
+              "[fetchUSDTBalance] Received fresh balance update:",
+              freshBalance
+            );
             set((state) => {
               const externalBalance = state.externalBalance || 0;
               if (!state.isDemo) {
                 return {
                   liveBalance: freshBalance,
-                  balance: freshBalance + externalBalance
+                  balance: freshBalance + externalBalance,
                 };
               }
               return { liveBalance: freshBalance };
@@ -272,14 +298,33 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         { data: portfolio },
         { data: ordersData },
         { data: tradesData },
-        { data: withdrawalsData }
+        { data: withdrawalsData },
       ] = await Promise.all([
         getSystemSettings(),
-        supabase.from('users').select('preferences').eq('id', user.id).single(),
-        supabase.from('portfolio').select('*').eq('user_id', user.id).eq('is_demo', isDemo),
-        supabase.from('orders').select('*').eq('user_id', user.id).eq('is_demo', isDemo).eq('status', 'open'),
-        supabase.from('trades').select('*').eq('user_id', user.id).eq('is_demo', isDemo).order('timestamp', { ascending: false }).limit(50),
-        supabase.from('withdrawals').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+        supabase.from("users").select("preferences").eq("id", user.id).single(),
+        supabase
+          .from("portfolio")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("is_demo", isDemo),
+        supabase
+          .from("orders")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("is_demo", isDemo)
+          .eq("status", "open"),
+        supabase
+          .from("trades")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("is_demo", isDemo)
+          .order("timestamp", { ascending: false })
+          .limit(50),
+        supabase
+          .from("withdrawals")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
       ]);
 
       // Process Settings
@@ -294,19 +339,21 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       }
 
       // Process Portfolio
-      const positions: Position[] = (portfolio || []).map((p: any) => ({
-        id: p.id,
-        assetId: p.asset,
-        assetName: p.asset.toUpperCase(),
-        side: 'buy' as OrderSide,
-        entryPrice: p.average_price,
-        currentPrice: p.average_price,
-        amount: p.total_quantity,
-        pnl: 0,
-        pnlPercentage: 0,
-        openedAt: new Date(p.updated_at).getTime(),
-        mode: 'spot' as TradingMode, // Default to spot for existing data
-      })).filter((p: Position) => p.amount > 0);
+      const positions: Position[] = (portfolio || [])
+        .map((p: any) => ({
+          id: p.id,
+          assetId: p.asset,
+          assetName: p.asset.toUpperCase(),
+          side: "buy" as OrderSide,
+          entryPrice: p.average_price,
+          currentPrice: p.average_price,
+          amount: p.total_quantity,
+          pnl: 0,
+          pnlPercentage: 0,
+          openedAt: new Date(p.updated_at).getTime(),
+          mode: "spot" as TradingMode, // Default to spot for existing data
+        }))
+        .filter((p: Position) => p.amount > 0);
 
       // Process Orders
       // Process Orders (Limit)
@@ -321,13 +368,16 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         total: o.total,
         status: o.status,
         timestamp: new Date(o.created_at).getTime(),
-        mode: 'spot' as TradingMode,
+        mode: "spot" as TradingMode,
       }));
 
       // Process Active Contracts (Persistent)
       let activeContracts: Position[] = [];
       if (!isDemo) {
-        const { data: activeContractsData } = await supabase.from('active_contracts').select('*').eq('user_id', user.id);
+        const { data: activeContractsData } = await supabase
+          .from("active_contracts")
+          .select("*")
+          .eq("user_id", user.id);
 
         activeContracts = (activeContractsData || []).map((c: any) => ({
           id: c.id,
@@ -340,7 +390,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           pnl: 0,
           pnlPercentage: 0,
           openedAt: c.opened_at, // Use numeric timestamp stored in DB
-          mode: 'contract',
+          mode: "contract",
           expiresAt: c.expires_at,
           payout: c.payout,
           initialInvestment: c.total,
@@ -349,65 +399,95 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
 
       // Process Trade History & Persistent Contracts
       // Split trades into Spot and Contracts
-      const spotTrades = (tradesData || []).filter((t: any) => !t.contract_data && !t.payout);
-      const contractTrades = (tradesData || []).filter((t: any) => t.contract_data || t.payout !== null);
+      const spotTrades = (tradesData || []).filter(
+        (t: any) => !t.contract_data && !t.payout
+      );
+      const contractTrades = (tradesData || []).filter(
+        (t: any) => t.contract_data || t.payout !== null
+      );
 
       const orderHistory: Order[] = spotTrades.map((t: any) => ({
         id: t.id,
         assetId: t.asset,
         assetName: t.asset.toUpperCase(),
-        type: 'market',
+        type: "market",
         side: t.type,
         price: t.price,
         amount: t.quantity,
         total: t.price * t.quantity,
-        status: 'filled',
+        status: "filled",
         timestamp: new Date(t.timestamp || t.created_at).getTime(),
         filledAt: new Date(t.timestamp || t.created_at).getTime(),
-        mode: 'spot' as TradingMode,
+        mode: "spot" as TradingMode,
       }));
 
       // Map Persistent Contract History
-      const persistentCompletedContracts: Position[] = contractTrades.map((t: any) => {
-        // const data = t.contract_data || {};
-        return {
-          id: t.id,
-          assetId: t.asset,
-          assetName: t.asset.toUpperCase(),
-          side: t.type as OrderSide,
-          entryPrice: t.price,
-          currentPrice: t.exit_price || t.price,
-          amount: t.quantity,
-          pnl: t.profit,
-          pnlPercentage: 0,
-          openedAt: t.open_time ? new Date(t.open_time).getTime() : new Date(t.created_at).getTime(),
-          mode: 'contract',
-          expiresAt: t.close_time ? new Date(t.close_time).getTime() : Date.now(),
-          payout: t.payout,
-          initialInvestment: Math.abs(t.quantity * t.price),
-          finalResult: t.status === 'win' ? 'win' : 'loss',
-          finalProfit: t.profit,
-        };
-      });
+      const persistentCompletedContracts: Position[] = contractTrades.map(
+        (t: any) => {
+          // Use timestamp instead of open_time since open_time doesn't exist
+          const openedAt = t.timestamp
+            ? new Date(t.timestamp).getTime()
+            : t.created_at
+            ? new Date(t.created_at).getTime()
+            : Date.now();
+
+          return {
+            id: t.id,
+            assetId: t.asset,
+            assetName: t.asset.toUpperCase(),
+            side: t.type as OrderSide,
+            entryPrice: t.price,
+            currentPrice: t.exit_price || t.price,
+            amount: t.quantity,
+            pnl: t.profit,
+            pnlPercentage: 0,
+            openedAt: openedAt,
+            mode: "contract",
+            expiresAt: openedAt + 60 * 1000, // Default to 60 seconds if not available
+            payout: t.payout,
+            initialInvestment: Math.abs(t.quantity * t.price),
+            finalResult:
+              t.status === "win"
+                ? "win"
+                : t.status === "loss"
+                ? "loss"
+                : undefined,
+            finalProfit: t.profit,
+          };
+        }
+      );
 
       // Process Withdrawal History
-      const withdrawalHistory: WithdrawalHistory[] = (withdrawalsData || []).map((w: any) => ({
+      const withdrawalHistory: WithdrawalHistory[] = (
+        withdrawalsData || []
+      ).map((w: any) => ({
         id: w.id,
         amount: w.amount,
         toAddress: w.address,
         timestamp: new Date(w.created_at).getTime(),
-        status: w.status === 'approved' ? 'completed' : w.status === 'rejected' ? 'failed' : 'pending',
-        type: w.type === 'send' ? 'wallet' : 'bank', // Simplified mapping
+        status:
+          w.status === "approved"
+            ? "completed"
+            : w.status === "rejected"
+            ? "failed"
+            : "pending",
+        type: w.type === "send" ? "wallet" : "bank", // Simplified mapping
       }));
 
       if (isDemo) {
         set((state) => ({
-          demoPositions: [...state.demoPositions.filter(p => p.mode !== 'spot'), ...positions],
+          demoPositions: [
+            ...state.demoPositions.filter((p) => p.mode !== "spot"),
+            ...positions,
+          ],
           demoOrders: orders,
           demoOrderHistory: orderHistory,
           demoWithdrawalHistory: withdrawalHistory,
 
-          positions: [...state.demoPositions.filter(p => p.mode !== 'spot'), ...positions],
+          positions: [
+            ...state.demoPositions.filter((p) => p.mode !== "spot"),
+            ...positions,
+          ],
           orders,
           orderHistory,
           withdrawalHistory,
@@ -437,55 +517,141 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
 
   subscribeToChanges: () => {
     const user = useAuthStoreHook.getState().user;
-    if (!user) return () => { };
+    if (!user) return () => {};
 
-    const isAdmin = user.role === 'admin';
+    const isAdmin = user.role === "admin";
 
     const channel = supabase
-      .channel('trading_changes')
+      .channel("trading_changes")
       // User-specific changes
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trades', filter: `user_id=eq.${user.id}` }, () => get().fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `user_id=eq.${user.id}` }, () => get().fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolio', filter: `user_id=eq.${user.id}` }, () => get().fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'usdt_wallets', filter: `user_id=eq.${user.id}` }, () => get().fetchUSDTBalance())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawals', filter: `user_id=eq.${user.id}` }, () => get().fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crypto_deposits', filter: `user_id=eq.${user.id}` }, () => get().fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions', filter: `user_id=eq.${user.id}` }, () => get().fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `id=eq.${user.id}` }, (payload) => {
-        // Update demo balance if it changed in preferences
-        const newRecord = payload.new as any;
-        const newDemoBalance = newRecord?.preferences?.demo_balance;
-        if (newDemoBalance !== undefined) {
-          set({ demoBalance: newDemoBalance });
-          if (get().isDemo) {
-            set({ balance: newDemoBalance });
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trades",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => get().fetchData(false)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => get().fetchData(false)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "portfolio",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => get().fetchData(false)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "usdt_wallets",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => get().fetchUSDTBalance()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "withdrawals",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => get().fetchData(false)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "crypto_deposits",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => get().fetchData(false)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "wallet_transactions",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => get().fetchData(false)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "users",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          // Update demo balance if it changed in preferences
+          const newRecord = payload.new as any;
+          const newDemoBalance = newRecord?.preferences?.demo_balance;
+          if (newDemoBalance !== undefined) {
+            set({ demoBalance: newDemoBalance });
+            if (get().isDemo) {
+              set({ balance: newDemoBalance });
+            }
           }
         }
-      })
+      )
 
       // Admin-wide changes (if admin)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'system_settings'
-      }, async () => {
-        console.log('[Realtime] System settings changed - fetching latest...');
-        const settings = await getSystemSettings();
-        set({ systemSettings: settings });
-        if (!isAdmin) {
-          toast.info("System settings updated");
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "system_settings",
+        },
+        async () => {
+          console.log(
+            "[Realtime] System settings changed - fetching latest..."
+          );
+          const settings = await getSystemSettings();
+          set({ systemSettings: settings });
+          if (!isAdmin) {
+            toast.info("System settings updated");
+          }
         }
-      });
+      );
 
     // If admin, also subscribe to all deposits and withdrawals for the admin panel alerts/updates
     if (isAdmin) {
       channel
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crypto_deposits' }, (payload) => {
-          toast.info(`New deposit request: $${payload.new.amount_usd}`);
-        })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'withdrawals' }, (payload) => {
-          toast.info(`New withdrawal request: $${payload.new.amount}`);
-        });
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "crypto_deposits" },
+          (payload) => {
+            toast.info(`New deposit request: $${payload.new.amount_usd}`);
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "withdrawals" },
+          (payload) => {
+            toast.info(`New withdrawal request: $${payload.new.amount}`);
+          }
+        );
     }
 
     channel.subscribe();
@@ -500,13 +666,35 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     if (!user) return;
 
     try {
-      await supabase.from('trades').delete().eq('user_id', user.id).eq('is_demo', true);
-      await supabase.from('orders').delete().eq('user_id', user.id).eq('is_demo', true);
-      await supabase.from('portfolio').delete().eq('user_id', user.id).eq('is_demo', true);
+      await supabase
+        .from("trades")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("is_demo", true);
+      await supabase
+        .from("orders")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("is_demo", true);
+      await supabase
+        .from("portfolio")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("is_demo", true);
 
-      const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-      const newPreferences = { ...(userData?.preferences || {}), demo_balance: 100000 };
-      await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+      const { data: userData } = await supabase
+        .from("users")
+        .select("preferences")
+        .eq("id", user.id)
+        .single();
+      const newPreferences = {
+        ...(userData?.preferences || {}),
+        demo_balance: 100000,
+      };
+      await supabase
+        .from("users")
+        .update({ preferences: newPreferences })
+        .eq("id", user.id);
 
       set({
         demoBalance: 100000,
@@ -531,65 +719,121 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     if (!user) return { success: false, error: "Not authenticated" };
 
     try {
-      // Refresh balance before checking
-      if (!isDemo) await get().fetchUSDTBalance();
-
-      const currentBalance = isDemo ? get().demoBalance : get().liveBalance;
-      const mode = orderData.mode || 'spot';
+      const mode = orderData.mode || "spot";
       const leverage = orderData.leverage || 1;
 
       // Calculate required margin/cost
-      const cost = mode === 'futures' ? orderData.total / leverage : orderData.total;
+      const cost =
+        mode === "futures" ? orderData.total / leverage : orderData.total;
+
+      // For contract mode, check trading_balance from users table
+      let currentBalance: number;
+      if (mode === "contract" && !isDemo) {
+        // Fetch trading_balance from users table
+        const { data: userData, error: balanceError } = await supabase
+          .from("users")
+          .select("trading_balance")
+          .eq("id", user.id)
+          .single();
+
+        if (balanceError) {
+          console.error(
+            "[placeOrder] Error fetching trading balance:",
+            balanceError
+          );
+          return { success: false, error: "Failed to fetch balance" };
+        }
+
+        // Convert NUMERIC to number (Supabase returns NUMERIC as string sometimes)
+        const rawBalance = userData?.trading_balance;
+        currentBalance =
+          typeof rawBalance === "string"
+            ? parseFloat(rawBalance)
+            : (rawBalance as number) || 0;
+
+        console.log("[placeOrder] Contract mode - Trading balance:", {
+          raw: rawBalance,
+          parsed: currentBalance,
+          cost: cost,
+          sufficient: currentBalance >= cost,
+        });
+      } else {
+        // For other modes, use existing balance logic
+        if (!isDemo) await get().fetchUSDTBalance();
+        currentBalance = isDemo ? get().demoBalance : get().liveBalance;
+      }
 
       // Balance Check for Buy
       // Balance Check
       // For Spot Buy, Futures (Buy/Sell), and Contracts (Buy/Sell), we need USDT balance.
       // Only Spot Sell uses Asset balance.
-      const requiresUSDT = mode !== 'spot' || orderData.side === 'buy';
+      const requiresUSDT = mode !== "spot" || orderData.side === "buy";
 
       if (requiresUSDT && cost > currentBalance) {
-        return { success: false, error: "Insufficient balance" };
+        console.error("[placeOrder] Insufficient balance:", {
+          mode,
+          cost,
+          currentBalance,
+          difference: cost - currentBalance,
+          requiresUSDT,
+        });
+        return {
+          success: false,
+          error: `Insufficient balance. Required: ${cost.toFixed(
+            2
+          )}, Available: ${currentBalance.toFixed(2)}`,
+        };
       }
 
       // Asset Balance Check for Spot Sell
-      if (mode === 'spot' && orderData.side === 'sell') {
+      if (mode === "spot" && orderData.side === "sell") {
         const currentPositions = isDemo ? demoPositions : livePositions;
-        const assetPosition = currentPositions.find(p => p.assetId === orderData.assetId && p.mode === 'spot');
+        const assetPosition = currentPositions.find(
+          (p) => p.assetId === orderData.assetId && p.mode === "spot"
+        );
 
         if (!assetPosition || assetPosition.amount < orderData.amount) {
-          return { success: false, error: `Insufficient ${orderData.assetName} balance` };
+          return {
+            success: false,
+            error: `Insufficient ${orderData.assetName} balance`,
+          };
         }
       }
 
       // Helper to deduct USDT from database wallets
       const deductUSDT = async (amount: number) => {
         if (isDemo || !user) return;
-        console.log(`[deductUSDT] Attempting to deduct ${amount} from user ${user.id}`);
+        console.log(
+          `[deductUSDT] Attempting to deduct ${amount} from user ${user.id}`
+        );
 
         try {
           // Get wallets ordered by oldest first to prioritize primary wallet
           const { data: wallets, error: fetchError } = await supabase
-            .from('usdt_wallets')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: true });
+            .from("usdt_wallets")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: true });
 
           if (fetchError) throw fetchError;
-          if (!wallets || wallets.length === 0) throw new Error("No wallets found to deduct from");
+          if (!wallets || wallets.length === 0)
+            throw new Error("No wallets found to deduct from");
 
           let remaining = amount;
           for (const wallet of wallets) {
             if (remaining <= 0) break;
             const deduct = Math.min(wallet.balance, remaining);
             if (deduct > 0) {
-              console.log(`[deductUSDT] Deducting ${deduct} from wallet ${wallet.id} (${wallet.network})`);
+              console.log(
+                `[deductUSDT] Deducting ${deduct} from wallet ${wallet.id} (${wallet.network})`
+              );
               const { error: updateError } = await supabase
-                .from('usdt_wallets')
+                .from("usdt_wallets")
                 .update({
                   balance: Math.max(0, wallet.balance - deduct),
-                  updated_at: new Date().toISOString()
+                  updated_at: new Date().toISOString(),
                 })
-                .eq('id', wallet.id);
+                .eq("id", wallet.id);
 
               if (updateError) throw updateError;
               remaining -= deduct;
@@ -597,7 +841,11 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           }
 
           if (remaining > 0) {
-            console.warn(`[deductUSDT] Could only deduct ${amount - remaining} of ${amount}`);
+            console.warn(
+              `[deductUSDT] Could only deduct ${
+                amount - remaining
+              } of ${amount}`
+            );
           }
 
           // Refresh local balance after deduction
@@ -612,18 +860,29 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       const creditUSDT = async (amount: number) => {
         const wallets = await getUserWallets(user.id);
         if (wallets.length > 0) {
-          await supabase.from('usdt_wallets').update({ balance: wallets[0].balance + amount }).eq('id', wallets[0].id);
+          await supabase
+            .from("usdt_wallets")
+            .update({ balance: wallets[0].balance + amount })
+            .eq("id", wallets[0].id);
         }
       };
 
       // Handle Contract Mode
-      if (mode === 'contract') {
+      if (mode === "contract") {
         if (!get().systemSettings.contract_trading_enabled) {
-          return { success: false, error: "Contract trading is currently disabled by administrator" };
+          return {
+            success: false,
+            error: "Contract trading is currently disabled by administrator",
+          };
         }
 
+        const contractId = Math.random().toString(36).substring(7);
+        const openedAt = Date.now();
+        const expiresAt = openedAt + (orderData.contractTime || 60) * 1000;
+        const payoutPercentage = orderData.payout || 85;
+
         const newPosition: Position = {
-          id: Math.random().toString(36).substring(7),
+          id: contractId,
           assetId: orderData.assetId,
           assetName: orderData.assetName,
           side: orderData.side,
@@ -632,46 +891,98 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           amount: orderData.amount,
           pnl: 0,
           pnlPercentage: 0,
-          openedAt: Date.now(),
-          mode: 'contract',
-          expiresAt: Date.now() + (orderData.contractTime || 60) * 1000,
-          payout: orderData.payout || 85,
+          openedAt: openedAt,
+          mode: "contract",
+          expiresAt: expiresAt,
+          payout: payoutPercentage,
           initialInvestment: orderData.total,
         };
 
-        const newBalance = currentBalance - orderData.total;
-
         if (isDemo) {
-          const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-          const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-          await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+          // Demo mode: Also don't deduct balance immediately for contracts
+          // Balance will be adjusted on expiration based on outcome
+          const { data: userData } = await supabase
+            .from("users")
+            .select("preferences")
+            .eq("id", user.id)
+            .single();
+          const currentDemoBalance = (userData?.preferences as any)?.demo_balance || currentBalance;
 
           set((state) => ({
-            demoBalance: newBalance,
-            balance: newBalance,
+            demoBalance: currentDemoBalance, // Keep balance unchanged
+            balance: currentDemoBalance,
             demoPositions: [newPosition, ...state.demoPositions],
             positions: [newPosition, ...state.positions],
           }));
         } else {
-
           // Live Mode:
-          // 1. Deduct USDT (this updates DB)
-          await deductUSDT(orderData.total);
+          // For contracts, we DON'T deduct balance immediately
+          // Balance will only be deducted if contract results in a loss
+          // If win, only profit is added (initial investment stays untouched)
 
-          // 2. Record Transaction (this updates DB)
-          await supabase.from('wallet_transactions').insert({
+          // 1. Create trade record in trades table (status: 'open')
+          // Note: Using type assertion to bypass TypeScript type checking since
+          // the generated types don't include the new contract fields yet
+          // Using 'timestamp' field instead of 'open_time' since open_time doesn't exist
+          const tradeInsertData: Record<string, unknown> = {
             user_id: user.id,
-            type: 'trade_pnl',
-            amount: -orderData.total, // Negative for investment
-            status: 'completed',
-            asset: 'USDT',
-            timestamp: new Date().toISOString()
-          });
+            asset: orderData.assetId,
+            quantity: orderData.amount,
+            price: orderData.price,
+            type: orderData.side,
+            is_demo: false,
+            status: "open",
+            timestamp: new Date(openedAt).toISOString(), // Use timestamp instead of open_time
+            // contract_data is optional - only include if column exists
+            // We'll use active_contracts table to track contracts instead
+          };
 
-          // 3. Persist Active Contract to DB (So it survives refresh)
+          console.log(
+            "[Contract Order] Inserting trade record:",
+            tradeInsertData
+          );
+          const { error: tradeError, data: tradeData } = await supabase
+            .from("trades")
+            .insert(tradeInsertData as never)
+            .select();
+
+          if (tradeError) {
+            console.error(
+              "[Contract Order] Error creating trade record:",
+              tradeError
+            );
+            console.error("[Contract Order] Error details:", {
+              message: tradeError.message,
+              code: tradeError.code,
+              details: tradeError.details,
+              hint: tradeError.hint,
+            });
+            console.error(
+              "[Contract Order] Trade insert data:",
+              JSON.stringify(tradeInsertData, null, 2)
+            );
+            return {
+              success: false,
+              error: `Failed to create trade record: ${
+                tradeError.message ||
+                tradeError.code ||
+                tradeError.details ||
+                "Unknown error"
+              }. Please check the browser console for details.`,
+            };
+          }
+
+          console.log(
+            "[Contract Order] Trade record created successfully:",
+            tradeData
+          );
+
+          // 2. No transaction record needed here - will be recorded on expiration
+
+          // 4. Persist Active Contract to DB (So it survives refresh)
           try {
-            await supabase.from('active_contracts').insert({
-              id: newPosition.id,
+            await supabase.from("active_contracts").insert({
+              id: contractId,
               user_id: user.id,
               asset_id: newPosition.assetId,
               asset_name: newPosition.assetName,
@@ -682,19 +993,20 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
               payout: newPosition.payout,
               expires_at: newPosition.expiresAt,
               opened_at: newPosition.openedAt,
-              status: 'open',
-              is_demo: false
+              status: "open",
+              is_demo: false,
             });
           } catch (persistError) {
-            console.error("Failed to persist contract, trade will be memory-only:", persistError);
+            console.error(
+              "Failed to persist contract, trade will be memory-only:",
+              persistError
+            );
           }
 
-          // 4. Update Local State (Optimistic)
-          // We update liveBalance immediately so the user sees the funds leave "live".
-          // The background fetch from deductUSDT will confirm this shortly.
+          // 3. Update Local State (balance unchanged for contracts)
           set((state) => ({
-            liveBalance: state.liveBalance - orderData.total,
-            balance: state.balance - orderData.total, // Assuming balance tracks live + external
+            liveBalance: currentBalance, // Keep balance unchanged
+            balance: currentBalance,
             livePositions: [newPosition, ...state.livePositions],
             positions: [newPosition, ...state.positions],
           }));
@@ -704,8 +1016,8 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       }
 
       // Handle Spot & Futures
-      if (orderData.type === 'market') {
-        if (mode === 'futures') {
+      if (orderData.type === "market") {
+        if (mode === "futures") {
           const newPosition: Position = {
             id: Math.random().toString(36).substring(7),
             assetId: orderData.assetId,
@@ -717,7 +1029,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             pnl: 0,
             pnlPercentage: 0,
             openedAt: Date.now(),
-            mode: 'futures',
+            mode: "futures",
             leverage: leverage,
             initialInvestment: cost,
             stopLoss: orderData.stopLoss,
@@ -727,9 +1039,19 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           const newBalance = currentBalance - cost;
 
           if (isDemo) {
-            const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-            const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-            await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+            const { data: userData } = await supabase
+              .from("users")
+              .select("preferences")
+              .eq("id", user.id)
+              .single();
+            const newPreferences = {
+              ...(userData?.preferences || {}),
+              demo_balance: newBalance,
+            };
+            await supabase
+              .from("users")
+              .update({ preferences: newPreferences })
+              .eq("id", user.id);
 
             set((state) => ({
               demoBalance: newBalance,
@@ -741,13 +1063,13 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             await deductUSDT(cost);
 
             // Record transaction for live mode
-            await supabase.from('wallet_transactions').insert({
+            await supabase.from("wallet_transactions").insert({
               user_id: user.id,
-              type: 'trade_pnl',
+              type: "trade_pnl",
               amount: -cost, // Negative for investment/margin
-              status: 'completed',
-              asset: 'USDT',
-              timestamp: new Date().toISOString()
+              status: "completed",
+              asset: "USDT",
+              timestamp: new Date().toISOString(),
             });
 
             set((state) => ({
@@ -761,8 +1083,8 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         }
 
         // Spot Sell
-        if (mode === 'spot' && orderData.side === 'sell') {
-          const { error } = await supabase.from('trades').insert({
+        if (mode === "spot" && orderData.side === "sell") {
+          const { error } = await supabase.from("trades").insert({
             user_id: user.id,
             asset: orderData.assetId,
             quantity: -orderData.amount,
@@ -774,21 +1096,31 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
 
           const newBalance = currentBalance + orderData.total;
           if (isDemo) {
-            const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-            const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-            await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+            const { data: userData } = await supabase
+              .from("users")
+              .select("preferences")
+              .eq("id", user.id)
+              .single();
+            const newPreferences = {
+              ...(userData?.preferences || {}),
+              demo_balance: newBalance,
+            };
+            await supabase
+              .from("users")
+              .update({ preferences: newPreferences })
+              .eq("id", user.id);
             set({ demoBalance: newBalance, balance: newBalance });
           } else {
             await creditUSDT(orderData.total);
 
             // Record transaction for live mode
-            await supabase.from('wallet_transactions').insert({
+            await supabase.from("wallet_transactions").insert({
               user_id: user.id,
-              type: 'trade_pnl',
+              type: "trade_pnl",
               amount: orderData.total, // Positive for sell proceeds
-              status: 'completed',
-              asset: 'USDT',
-              timestamp: new Date().toISOString()
+              status: "completed",
+              asset: "USDT",
+              timestamp: new Date().toISOString(),
             });
 
             set({ liveBalance: newBalance, balance: newBalance });
@@ -799,7 +1131,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         }
 
         // Spot Buy
-        const { error } = await supabase.from('trades').insert({
+        const { error } = await supabase.from("trades").insert({
           user_id: user.id,
           asset: orderData.assetId,
           quantity: orderData.amount,
@@ -813,28 +1145,38 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         const newBalance = currentBalance - orderData.total;
 
         if (isDemo) {
-          const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-          const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-          await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+          const { data: userData } = await supabase
+            .from("users")
+            .select("preferences")
+            .eq("id", user.id)
+            .single();
+          const newPreferences = {
+            ...(userData?.preferences || {}),
+            demo_balance: newBalance,
+          };
+          await supabase
+            .from("users")
+            .update({ preferences: newPreferences })
+            .eq("id", user.id);
           set({ demoBalance: newBalance, balance: newBalance });
         } else {
           await deductUSDT(orderData.total);
 
           // Record transaction for live mode
-          await supabase.from('wallet_transactions').insert({
+          await supabase.from("wallet_transactions").insert({
             user_id: user.id,
-            type: 'trade_pnl',
+            type: "trade_pnl",
             amount: -orderData.total, // Negative for buy cost
-            status: 'completed',
-            asset: 'USDT',
-            timestamp: new Date().toISOString()
+            status: "completed",
+            asset: "USDT",
+            timestamp: new Date().toISOString(),
           });
 
           set({ liveBalance: newBalance, balance: newBalance });
         }
       } else {
         // Limit Orders
-        const { error } = await supabase.from('orders').insert({
+        const { error } = await supabase.from("orders").insert({
           user_id: user.id,
           asset_id: orderData.assetId,
           asset_name: orderData.assetName,
@@ -843,30 +1185,40 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           price: orderData.price,
           amount: orderData.amount,
           total: orderData.total,
-          status: 'open',
+          status: "open",
           is_demo: isDemo,
         });
 
         if (error) throw error;
 
-        if (orderData.side === 'buy') {
+        if (orderData.side === "buy") {
           const newBalance = currentBalance - orderData.total;
           if (isDemo) {
-            const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-            const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-            await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+            const { data: userData } = await supabase
+              .from("users")
+              .select("preferences")
+              .eq("id", user.id)
+              .single();
+            const newPreferences = {
+              ...(userData?.preferences || {}),
+              demo_balance: newBalance,
+            };
+            await supabase
+              .from("users")
+              .update({ preferences: newPreferences })
+              .eq("id", user.id);
             set({ demoBalance: newBalance, balance: newBalance });
           } else {
             await deductUSDT(orderData.total);
 
             // Record transaction for live mode
-            await supabase.from('wallet_transactions').insert({
+            await supabase.from("wallet_transactions").insert({
               user_id: user.id,
-              type: 'trade_pnl',
+              type: "trade_pnl",
               amount: -orderData.total, // Negative for locked funds
-              status: 'completed',
-              asset: 'USDT',
-              timestamp: new Date().toISOString()
+              status: "completed",
+              asset: "USDT",
+              timestamp: new Date().toISOString(),
             });
 
             set({ liveBalance: newBalance, balance: newBalance });
@@ -882,11 +1234,10 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         const newBalance = get().liveBalance;
         setCachedBalance(user.id, newBalance);
         updateSnapshotInDB(user.id);
-        console.log('[placeOrder] Balance snapshot updated:', newBalance);
+        console.log("[placeOrder] Balance snapshot updated:", newBalance);
       }
 
       return { success: true };
-
     } catch (error: any) {
       console.error("Place order error:", error);
       return { success: false, error: error.message };
@@ -898,11 +1249,12 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     const now = Date.now();
 
     // Filter out contracts that are already being processed
-    const expiredContracts = positions.filter(p =>
-      p.mode === 'contract' &&
-      p.expiresAt &&
-      now >= p.expiresAt &&
-      !processingContractIds.has(p.id)
+    const expiredContracts = positions.filter(
+      (p) =>
+        p.mode === "contract" &&
+        p.expiresAt &&
+        now >= p.expiresAt &&
+        !processingContractIds.has(p.id)
     );
 
     if (expiredContracts.length === 0) return;
@@ -913,31 +1265,36 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     // Helper to credit USDT to database wallets
     const creditUSDTToDB = async (amount: number) => {
       if (!user || isDemo) return;
-      console.log(`[creditUSDTToDB] Attempting to credit ${amount} to user ${user.id}`);
+      console.log(
+        `[creditUSDTToDB] Attempting to credit ${amount} to user ${user.id}`
+      );
 
       try {
         // Find wallets, prioritized by USDT_TRC20 then oldest first
         const { data: wallets, error: fetchError } = await supabase
-          .from('usdt_wallets')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: true });
+          .from("usdt_wallets")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true });
 
         if (fetchError) throw fetchError;
 
         if (wallets && wallets.length > 0) {
           // Prefer USDT_TRC20 wallet if it exists, otherwise use the first one (oldest)
-          const targetWallet = wallets.find(w => w.network === 'USDT_TRC20') || wallets[0];
+          const targetWallet =
+            wallets.find((w) => w.network === "USDT_TRC20") || wallets[0];
 
-          console.log(`[creditUSDTToDB] Crediting ${amount} to wallet ${targetWallet.id} (${targetWallet.network})`);
+          console.log(
+            `[creditUSDTToDB] Crediting ${amount} to wallet ${targetWallet.id} (${targetWallet.network})`
+          );
 
           const { error: updateError } = await supabase
-            .from('usdt_wallets')
+            .from("usdt_wallets")
             .update({
               balance: (targetWallet.balance || 0) + amount,
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
             })
-            .eq('id', targetWallet.id);
+            .eq("id", targetWallet.id);
 
           if (updateError) {
             console.error("[creditUSDTToDB] Update failed:", updateError);
@@ -945,8 +1302,6 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           }
 
           console.log(`[creditUSDTToDB] Successfully credited ${amount}`);
-
-
         } else {
           console.warn("[creditUSDTToDB] No wallets found to credit");
         }
@@ -959,48 +1314,94 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     const user_id = user?.id;
 
     // Helper to record transaction
-    const recordTransaction = async (amount: number, type: 'trade_pnl', status: 'completed') => {
+    const recordTransaction = async (
+      amount: number,
+      type: "trade_pnl",
+      status: "completed"
+    ) => {
       if (!user_id || isDemo) return;
       try {
-        await supabase.from('wallet_transactions').insert({
+        await supabase.from("wallet_transactions").insert({
           user_id,
           type,
           amount,
           status,
-          asset: 'USDT',
-          timestamp: new Date().toISOString()
+          asset: "USDT",
+          timestamp: new Date().toISOString(),
         });
       } catch (err) {
         console.error("Error recording transaction:", err);
       }
     };
 
+    // Fetch system settings from Supabase table (fresh data)
+    let contractOutcomeMode = "fair";
+    if (!isDemo) {
+      try {
+        const { data: settingsData, error: settingsError } = await supabase
+          .from("system_settings")
+          .select("contract_outcome_mode")
+          .limit(1)
+          .maybeSingle();
+
+        if (!settingsError && settingsData) {
+          contractOutcomeMode = settingsData.contract_outcome_mode || "fair";
+        } else {
+          // Fallback to cached settings if DB fetch fails
+          contractOutcomeMode =
+            get().systemSettings.contract_outcome_mode || "fair";
+        }
+      } catch (error) {
+        console.error(
+          "[Contract Expiration] Error fetching system settings:",
+          error
+        );
+        // Fallback to cached settings
+        contractOutcomeMode =
+          get().systemSettings.contract_outcome_mode || "fair";
+      }
+    }
+
     // Process contracts sequentially to ensure atomic updates
     for (const contract of expiredContracts) {
       if (processingContractIds.has(contract.id)) continue; // Double check
       processingContractIds.add(contract.id);
 
-      const { contract_outcome_mode } = get().systemSettings;
-
       let isWin = false;
-      let isTie = contract.currentPrice === contract.entryPrice;
+      let isTie = false;
 
-      console.log(`[Contract Expiration] Asset: ${contract.assetName}, Mode: ${contract_outcome_mode}, Side: ${contract.side}, Entry: ${contract.entryPrice}, Current: ${contract.currentPrice}`);
+      console.log(
+        `[Contract Expiration] Asset: ${contract.assetName}, Mode: ${contractOutcomeMode}, Side: ${contract.side}, Entry: ${contract.entryPrice}, Current: ${contract.currentPrice}`
+      );
 
-      if (!isDemo && contract_outcome_mode === 'always_win') {
+      if (!isDemo && contractOutcomeMode === "always_win") {
         isWin = true;
         isTie = false; // Force win, even if price didn't move
         console.log(`[Contract Expiration] FORCED WIN (always_win mode)`);
-      } else if (!isDemo && contract_outcome_mode === 'always_loss') {
+      } else if (!isDemo && contractOutcomeMode === "always_loss") {
         isWin = false;
         isTie = false; // Force loss
         console.log(`[Contract Expiration] FORCED LOSS (always_loss mode)`);
       } else {
-        // Fair mode or Demo mode
-        if (contract.side === 'buy') {
-          isWin = contract.currentPrice > contract.entryPrice;
+        // Fair mode: Randomly determine win or loss (50/50 chance)
+        // Demo mode: Use actual price comparison
+        if (isDemo) {
+          // Demo mode uses actual price comparison
+          if (contract.side === "buy") {
+            isWin = contract.currentPrice > contract.entryPrice;
+          } else {
+            isWin = contract.currentPrice < contract.entryPrice;
+          }
+          isTie = contract.currentPrice === contract.entryPrice;
         } else {
-          isWin = contract.currentPrice < contract.entryPrice;
+          // Fair mode: Random 50/50 chance
+          isWin = Math.random() >= 0.5; // 50% chance of win
+          isTie = false;
+          console.log(
+            `[Contract Expiration] FAIR MODE: Random result = ${
+              isWin ? "WIN" : "LOSS"
+            }`
+          );
         }
       }
 
@@ -1011,7 +1412,9 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         const payoutPercentage = (contract.payout || 85) / 100;
         profit = (contract.initialInvestment || 0) * payoutPercentage;
         payoutAmount = (contract.initialInvestment || 0) + profit;
-        console.log(`[Contract Expiration] WIN: Profit ${profit}, Payout ${payoutAmount}`);
+        console.log(
+          `[Contract Expiration] WIN: Profit ${profit}, Payout ${payoutAmount}`
+        );
       } else if (isTie) {
         payoutAmount = contract.initialInvestment || 0;
         console.log(`[Contract Expiration] TIE: Refund ${payoutAmount}`);
@@ -1022,35 +1425,119 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       // Update DB first (if live)
       if (!isDemo) {
         try {
-          // 1. Credit Payout (if any)
-          if (payoutAmount > 0) {
-            await creditUSDTToDB(payoutAmount);
-            await recordTransaction(isWin ? profit : 0, 'trade_pnl', 'completed');
+          // 1. Update trading_balance based on outcome
+          // Fetch current trading balance
+          const { data: userData } = await supabase
+            .from("users")
+            .select("trading_balance")
+            .eq("id", user.id)
+            .single();
+
+          if (!userData) throw new Error("User data not found");
+
+          // Convert NUMERIC to number (Supabase returns NUMERIC as string sometimes)
+          const rawBalance = userData?.trading_balance;
+          const currentTradingBalance =
+            typeof rawBalance === "string"
+              ? parseFloat(rawBalance)
+              : (rawBalance as number) || 0;
+
+          let newTradingBalance = currentTradingBalance;
+          let balanceChange = 0;
+
+          if (isWin) {
+            // Win: Add profit amount to trading balance
+            // Initial investment was NOT deducted when placing order, so only add profit
+            balanceChange = profit;
+            newTradingBalance = currentTradingBalance + profit;
+            console.log(
+              `[Contract Expiration] WIN: Adding profit ${profit} to trading balance (initial investment not deducted)`
+            );
+          } else if (isTie) {
+            // Tie: No change (nothing was deducted, so nothing to refund)
+            balanceChange = 0;
+            console.log(
+              `[Contract Expiration] TIE: No balance change (nothing was deducted)`
+            );
+          } else {
+            // Loss: Deduct initial investment now (was not deducted when placing order)
+            const initialInvestment = contract.initialInvestment || 0;
+            balanceChange = -initialInvestment;
+            newTradingBalance = currentTradingBalance - initialInvestment;
+            console.log(
+              `[Contract Expiration] LOSS: Deducting initial investment ${initialInvestment} from trading balance`
+            );
+          }
+
+          // Update trading balance if there's a change
+          if (balanceChange !== 0) {
+            const { error: balanceError } = await supabase
+              .from("users")
+              .update({ trading_balance: newTradingBalance })
+              .eq("id", user.id);
+
+            if (balanceError) throw balanceError;
+
+            // Record transaction for wins (profit) or losses (deduction)
+            await recordTransaction(
+              Math.abs(balanceChange), // Use absolute value for transaction amount
+              "trade_pnl",
+              "completed"
+            );
           }
 
           // 2. Remove from active_contracts (Persistence cleanup)
-          await supabase.from('active_contracts').delete().eq('id', contract.id);
+          await supabase
+            .from("active_contracts")
+            .delete()
+            .eq("id", contract.id);
 
-          // 3. Archive to trades history
-          await supabase.from('trades').insert({
-            // id: contract.id, // Let DB generate new ID or use existing? Trades usually have their own ID.
-            user_id: user.id,
-            asset: contract.assetId,
-            quantity: contract.amount, // Or total investment? structure varies.
-            price: contract.entryPrice,
-            exit_price: contract.currentPrice,
-            payout: payoutAmount,
-            profit: isWin ? profit : -contract.initialInvestment!,
-            type: contract.side,
-            open_time: new Date(contract.openedAt).toISOString(),
-            close_time: new Date().toISOString(),
-            status: isWin ? 'win' : 'loss',
-            is_demo: false,
-            contract_data: contract // Store full metadata if needed
-          });
+          // 3. Update the trade record in trades table
+          // Find the trade record by matching contract details
+          // We'll use the active_contracts table to find the associated trade
+          // by matching user_id, asset, type, status='open', and open_time
+          const { data: tradeRecords, error: findError } = await supabase
+            .from("trades")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("asset", contract.assetId)
+            .eq("type", contract.side)
+            .eq("status", "open")
+            .order("timestamp", { ascending: false })
+            .limit(1);
 
+          if (!findError && tradeRecords && tradeRecords.length > 0) {
+            const tradeId = tradeRecords[0].id;
+            const tradeStatus = isTie ? "tie" : isWin ? "win" : "loss";
+
+            const updateData: Record<string, unknown> = {
+              exit_price: contract.currentPrice,
+              payout: payoutAmount,
+              profit: isWin ? profit : isTie ? 0 : -contract.initialInvestment!,
+              status: tradeStatus,
+              // Note: close_time column doesn't exist, using timestamp is sufficient
+            };
+
+            const { error: updateError } = await supabase
+              .from("trades")
+              .update(updateData as never)
+              .eq("id", tradeId);
+
+            if (updateError) {
+              console.error("Error updating trade record:", updateError);
+              throw updateError;
+            }
+          } else {
+            console.warn(
+              "Could not find trade record to update for contract:",
+              contract.id
+            );
+          }
         } catch (e) {
-          console.error("Failed to process contract DB updates (Payout/Persistence). Skipping local update to prevent desync", e);
+          console.error(
+            "Failed to process contract DB updates (Payout/Persistence). Skipping local update to prevent desync",
+            e
+          );
           continue; // Skip local update if DB failed
         }
       }
@@ -1058,29 +1545,54 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       // Update Local State
       const completedContract: Position = {
         ...contract,
-        finalResult: isWin ? 'win' : 'loss',
+        finalResult: isWin ? "win" : "loss",
         finalProfit: profit,
         pnl: isWin ? profit : -(contract.initialInvestment || 0),
       };
 
       // Remove from active positions and add to completed
       set((state) => {
-        const newBalance = isDemo ? state.demoBalance + payoutAmount : state.liveBalance; // Live balance updates via subscription
+        // Calculate balance change for demo mode
+        let balanceChange = 0;
+        if (isDemo) {
+          if (isWin) {
+            // Win: Add profit only (initial investment was not deducted)
+            balanceChange = profit;
+          } else if (isTie) {
+            // Tie: No change
+            balanceChange = 0;
+          } else {
+            // Loss: Deduct initial investment (was not deducted when placing order)
+            balanceChange = -(contract.initialInvestment || 0);
+          }
+        }
+
+        const newBalance = isDemo
+          ? state.demoBalance + balanceChange
+          : state.liveBalance; // Live balance updates via DB update above
 
         // Update demo balance in DB if demo
         if (isDemo && user) {
-          supabase.from('users').update({
-            preferences: { ...user.preferences, demo_balance: newBalance }
-          }).eq('id', user.id).then();
+          supabase
+            .from("users")
+            .update({
+              preferences: { ...user.preferences, demo_balance: newBalance },
+            })
+            .eq("id", user.id)
+            .then();
         }
 
         // We don't remove from processingContractIds here immediately because we want to ensure
         // the next render cycle has completed with the removed position.
 
         return {
-          positions: state.positions.filter(p => p.id !== contract.id),
-          livePositions: isDemo ? state.livePositions : state.livePositions.filter(p => p.id !== contract.id),
-          demoPositions: isDemo ? state.demoPositions.filter(p => p.id !== contract.id) : state.demoPositions,
+          positions: state.positions.filter((p) => p.id !== contract.id),
+          livePositions: isDemo
+            ? state.livePositions
+            : state.livePositions.filter((p) => p.id !== contract.id),
+          demoPositions: isDemo
+            ? state.demoPositions.filter((p) => p.id !== contract.id)
+            : state.demoPositions,
           completedContracts: [completedContract, ...state.completedContracts],
           // Only update store balance for Demo. Live relies on subscription or fetch.
           balance: isDemo ? newBalance : state.balance,
@@ -1099,15 +1611,17 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         useNotificationStore.getState().addNotification({
           title: "Trade Won!",
           message: `You won $${profit.toFixed(2)} on ${contract.assetName}`,
-          type: 'success',
-          iconType: 'trade'
+          type: "success",
+          iconType: "trade",
         });
       } else if (!isTie) {
         useNotificationStore.getState().addNotification({
           title: "Trade Lost",
-          message: `You lost $${contract.initialInvestment?.toFixed(2)} on ${contract.assetName}`,
-          type: 'error',
-          iconType: 'trade'
+          message: `You lost $${contract.initialInvestment?.toFixed(2)} on ${
+            contract.assetName
+          }`,
+          type: "error",
+          iconType: "trade",
         });
       }
     }
@@ -1122,44 +1636,61 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     try {
       // 1. Fetch order details to check if it's a buy order that needs refund
       const { data: order, error: fetchError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
+        .from("orders")
+        .select("*")
+        .eq("id", orderId)
         .single();
 
-      if (fetchError || !order) throw fetchError || new Error("Order not found");
-      if (order.status !== 'open') return;
+      if (fetchError || !order)
+        throw fetchError || new Error("Order not found");
+      if (order.status !== "open") return;
 
       // 2. Update status to cancelled
-      const { error: updateError } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({ status: "cancelled" })
+        .eq("id", orderId);
       if (updateError) throw updateError;
 
       // 3. Refund if it was a buy order
-      if (order.side === 'buy') {
+      if (order.side === "buy") {
         const user = useAuthStoreHook.getState().user;
         if (!user) return;
 
         if (order.is_demo) {
-          const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
+          const { data: userData } = await supabase
+            .from("users")
+            .select("preferences")
+            .eq("id", user.id)
+            .single();
           const currentDemoBalance = userData?.preferences?.demo_balance || 0;
           const newBalance = currentDemoBalance + order.total;
-          const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-          await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+          const newPreferences = {
+            ...(userData?.preferences || {}),
+            demo_balance: newBalance,
+          };
+          await supabase
+            .from("users")
+            .update({ preferences: newPreferences })
+            .eq("id", user.id);
           set({ demoBalance: newBalance, balance: newBalance });
         } else {
           // Credit USDT back to wallet
           const wallets = await getUserWallets(user.id);
           if (wallets.length > 0) {
-            await supabase.from('usdt_wallets').update({ balance: wallets[0].balance + order.total }).eq('id', wallets[0].id);
+            await supabase
+              .from("usdt_wallets")
+              .update({ balance: wallets[0].balance + order.total })
+              .eq("id", wallets[0].id);
 
             // Record refund transaction
-            await supabase.from('wallet_transactions').insert({
+            await supabase.from("wallet_transactions").insert({
               user_id: user.id,
-              type: 'trade_pnl',
+              type: "trade_pnl",
               amount: order.total, // Positive for refund
-              status: 'completed',
-              asset: 'USDT',
-              timestamp: new Date().toISOString()
+              status: "completed",
+              asset: "USDT",
+              timestamp: new Date().toISOString(),
             });
 
             await get().fetchUSDTBalance();
@@ -1175,11 +1706,11 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
 
   closePosition: async (positionId) => {
     const { positions } = get();
-    const position = positions.find(p => p.id === positionId);
+    const position = positions.find((p) => p.id === positionId);
     if (!position) return;
 
     // If it's a contract, you can't close it manually (usually)
-    if (position.mode === 'contract') return;
+    if (position.mode === "contract") return;
 
     try {
       const user = useAuthStoreHook.getState().user;
@@ -1190,7 +1721,10 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           if (!user) return;
           const wallets = await getUserWallets(user.id);
           if (wallets.length > 0) {
-            const { error } = await supabase.from('usdt_wallets').update({ balance: wallets[0].balance + amount }).eq('id', wallets[0].id);
+            const { error } = await supabase
+              .from("usdt_wallets")
+              .update({ balance: wallets[0].balance + amount })
+              .eq("id", wallets[0].id);
             if (error) throw error;
           }
         } catch (error) {
@@ -1200,8 +1734,10 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       };
 
       // Handle Futures/Local Positions
-      if (position.mode === 'futures') {
-        const currentBalance = get().isDemo ? get().demoBalance : get().liveBalance;
+      if (position.mode === "futures") {
+        const currentBalance = get().isDemo
+          ? get().demoBalance
+          : get().liveBalance;
         // PnL is already calculated in position.pnl
         // Return: Initial Margin + PnL
         const returnAmount = position.initialInvestment! + position.pnl;
@@ -1209,42 +1745,56 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
 
         if (get().isDemo) {
           if (user) {
-            const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-            const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-            await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+            const { data: userData } = await supabase
+              .from("users")
+              .select("preferences")
+              .eq("id", user.id)
+              .single();
+            const newPreferences = {
+              ...(userData?.preferences || {}),
+              demo_balance: newBalance,
+            };
+            await supabase
+              .from("users")
+              .update({ preferences: newPreferences })
+              .eq("id", user.id);
           }
           set((state) => ({
             demoBalance: newBalance,
             balance: newBalance,
-            demoPositions: state.demoPositions.filter(p => p.id !== positionId),
-            positions: state.positions.filter(p => p.id !== positionId),
+            demoPositions: state.demoPositions.filter(
+              (p) => p.id !== positionId
+            ),
+            positions: state.positions.filter((p) => p.id !== positionId),
           }));
         } else {
           await creditUSDT(returnAmount);
 
           // Record transaction for live mode
-          await supabase.from('wallet_transactions').insert({
+          await supabase.from("wallet_transactions").insert({
             user_id: user.id,
-            type: 'trade_pnl',
+            type: "trade_pnl",
             amount: returnAmount, // Positive for return (margin + pnl)
-            status: 'completed',
-            asset: 'USDT',
-            timestamp: new Date().toISOString()
+            status: "completed",
+            asset: "USDT",
+            timestamp: new Date().toISOString(),
           });
 
           // We don't update liveBalance directly here because we want to fetch it from DB to be sure
           await get().fetchUSDTBalance();
           set((state) => ({
-            livePositions: state.livePositions.filter(p => p.id !== positionId),
-            positions: state.positions.filter(p => p.id !== positionId),
+            livePositions: state.livePositions.filter(
+              (p) => p.id !== positionId
+            ),
+            positions: state.positions.filter((p) => p.id !== positionId),
           }));
         }
         return;
       }
 
       // Existing Spot Logic
-      const side = position.side === 'buy' ? 'sell' : 'buy';
-      const { error } = await supabase.from('trades').insert({
+      const side = position.side === "buy" ? "sell" : "buy";
+      const { error } = await supabase.from("trades").insert({
         user_id: useAuthStoreHook.getState().user?.id,
         asset: position.assetId,
         quantity: position.amount,
@@ -1255,15 +1805,27 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
 
       if (error) throw error;
 
-      const currentBalance = get().isDemo ? get().demoBalance : get().liveBalance;
+      const currentBalance = get().isDemo
+        ? get().demoBalance
+        : get().liveBalance;
       const total = position.amount * position.currentPrice;
       const newBalance = currentBalance + total;
 
       if (get().isDemo) {
         if (user) {
-          const { data: userData } = await supabase.from('users').select('preferences').eq('id', user.id).single();
-          const newPreferences = { ...(userData?.preferences || {}), demo_balance: newBalance };
-          await supabase.from('users').update({ preferences: newPreferences }).eq('id', user.id);
+          const { data: userData } = await supabase
+            .from("users")
+            .select("preferences")
+            .eq("id", user.id)
+            .single();
+          const newPreferences = {
+            ...(userData?.preferences || {}),
+            demo_balance: newBalance,
+          };
+          await supabase
+            .from("users")
+            .update({ preferences: newPreferences })
+            .eq("id", user.id);
         }
         set({ demoBalance: newBalance, balance: newBalance });
       } else {
@@ -1287,22 +1849,33 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             let pnl = 0;
             let pnlPercentage = 0;
 
-            if (pos.mode === 'contract') {
+            if (pos.mode === "contract") {
               // For contracts, PnL is binary (Win/Loss) but we can show potential PnL
-              const isWin = pos.side === 'buy' ? currentPrice > pos.entryPrice : currentPrice < pos.entryPrice;
-              pnl = isWin ? (pos.initialInvestment! * (pos.payout! / 100)) : -pos.initialInvestment!;
+              const isWin =
+                pos.side === "buy"
+                  ? currentPrice > pos.entryPrice
+                  : currentPrice < pos.entryPrice;
+              pnl = isWin
+                ? pos.initialInvestment! * (pos.payout! / 100)
+                : -pos.initialInvestment!;
               pnlPercentage = isWin ? pos.payout! : -100;
-            } else if (pos.mode === 'futures') {
-              // Futures PnL = (Price Diff * Amount) * Leverage? 
+            } else if (pos.mode === "futures") {
+              // Futures PnL = (Price Diff * Amount) * Leverage?
               // Actually Amount usually includes leverage if we bought that many units.
               // But if Amount = Units, then PnL = (Current - Entry) * Amount.
               // Since we stored leveraged amount, this is correct.
-              pnl = pos.side === "buy" ? priceDiff * pos.amount : -priceDiff * pos.amount;
+              pnl =
+                pos.side === "buy"
+                  ? priceDiff * pos.amount
+                  : -priceDiff * pos.amount;
               // Percentage based on Initial Investment (Margin)
               pnlPercentage = (pnl / pos.initialInvestment!) * 100;
             } else {
               // Spot
-              pnl = pos.side === "buy" ? priceDiff * pos.amount : -priceDiff * pos.amount;
+              pnl =
+                pos.side === "buy"
+                  ? priceDiff * pos.amount
+                  : -priceDiff * pos.amount;
               pnlPercentage = (priceDiff / pos.entryPrice) * 100;
             }
 
@@ -1310,7 +1883,12 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
               ...pos,
               currentPrice,
               pnl,
-              pnlPercentage: pos.side === "buy" ? pnlPercentage : (pos.mode === 'contract' ? pnlPercentage : -pnlPercentage),
+              pnlPercentage:
+                pos.side === "buy"
+                  ? pnlPercentage
+                  : pos.mode === "contract"
+                  ? pnlPercentage
+                  : -pnlPercentage,
             };
           }
           return pos;
@@ -1334,7 +1912,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       if (!state.isDemo) {
         return {
           externalBalance: newExternalBalance,
-          balance: state.liveBalance + newExternalBalance
+          balance: state.liveBalance + newExternalBalance,
         };
       }
       return { externalBalance: newExternalBalance };
@@ -1353,7 +1931,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     if (isDemo) {
       set((state) => ({
         demoBalance: state.demoBalance - amount,
-        balance: state.demoBalance - amount
+        balance: state.demoBalance - amount,
       }));
       return { success: true };
     }
@@ -1365,32 +1943,40 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
     try {
       // 1. Fetch the user's wallet to check compatibility and existence
       const wallets = await getUserWallets(user.id);
-      if (wallets.length === 0) return { success: false, error: "No USDT wallet found. Please create one in the Wallet section first." };
+      if (wallets.length === 0)
+        return {
+          success: false,
+          error:
+            "No USDT wallet found. Please create one in the Wallet section first.",
+        };
 
       const wallet = wallets[0];
 
-      // 2. IMPORTANT: We no longer deduct funds immediately. 
+      // 2. IMPORTANT: We no longer deduct funds immediately.
       // Funds are deducted by the Admin upon approval.
       // But we still check if they HAVE enough balance to request it.
       const fee = 0; // Standardize fee for trading balance withdrawals or handle as needed
       if (wallet.balance < amount + fee) {
-        return { success: false, error: `Insufficient balance (Required: ${amount + fee}, Available: ${wallet.balance})` };
+        return {
+          success: false,
+          error: `Insufficient balance (Required: ${amount + fee}, Available: ${
+            wallet.balance
+          })`,
+        };
       }
 
       // 3. Create Withdrawal Request in the database
       // This is what the Admin Panel's get_admin_withdrawals RPC looks for.
-      const { error: insertError } = await supabase
-        .from('withdrawals')
-        .insert({
-          user_id: user.id,
-          amount: amount,
-          fee: fee,
-          address: walletAddress || wallet.address, // Default to their wallet address if not provided
-          network: wallet.network,
-          type: 'withdrawal',
-          status: 'pending',
-          created_at: new Date().toISOString()
-        });
+      const { error: insertError } = await supabase.from("withdrawals").insert({
+        user_id: user.id,
+        amount: amount,
+        fee: fee,
+        address: walletAddress || wallet.address, // Default to their wallet address if not provided
+        network: wallet.network,
+        type: "withdrawal",
+        status: "pending",
+        created_at: new Date().toISOString(),
+      });
 
       if (insertError) throw insertError;
 
@@ -1398,10 +1984,12 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
       // We don't deduct liveBalance here anymore.
 
       return { success: true };
-
     } catch (error: any) {
       console.error("Withdrawal error:", error);
-      return { success: false, error: error.message || "Failed to process withdrawal" };
+      return {
+        success: false,
+        error: error.message || "Failed to process withdrawal",
+      };
     }
   },
 

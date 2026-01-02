@@ -70,7 +70,7 @@ const TopBar = () => {
     <>
       <div className="flex items-center justify-between flex-1 min-w-0">
         <div className="flex items-center gap-2 md:gap-4">
-          {/* Search Button */}
+          {/* Search Button
           <Button
             variant="ghost"
             size="icon"
@@ -78,7 +78,7 @@ const TopBar = () => {
             className="text-muted-foreground hover:text-foreground rounded-xl"
           >
             <Search size={18} />
-          </Button>
+          </Button> */}
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
@@ -152,7 +152,7 @@ const TopBar = () => {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2 cursor-help">
                           <span className="text-muted-foreground">
-                            Balance:
+                            Total Balance:
                           </span>
                           <span className="font-mono font-bold text-foreground">
                             {formatUSDT(totalWalletBalance)}
