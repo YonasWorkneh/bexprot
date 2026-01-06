@@ -499,8 +499,10 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           liveOrderHistory: orderHistory,
           liveWithdrawalHistory: withdrawalHistory,
 
-          // Merge persistent contracts with session contracts
-          completedContracts: [...persistentCompletedContracts],
+          // Don't load historical completed contracts into completedContracts
+          // completedContracts is only for contracts that complete during the current session
+          // Historical contracts are shown in trade history, not as modal notifications
+          completedContracts: [],
 
           positions: [...activeContracts, ...positions],
           orders,
@@ -906,7 +908,8 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             .select("preferences")
             .eq("id", user.id)
             .single();
-          const currentDemoBalance = (userData?.preferences as any)?.demo_balance || currentBalance;
+          const currentDemoBalance =
+            (userData?.preferences as any)?.demo_balance || currentBalance;
 
           set((state) => ({
             demoBalance: currentDemoBalance, // Keep balance unchanged
@@ -932,6 +935,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             type: orderData.side,
             is_demo: false,
             status: "open",
+            cycle: orderData.contractTime,
             timestamp: new Date(openedAt).toISOString(), // Use timestamp instead of open_time
             // contract_data is optional - only include if column exists
             // We'll use active_contracts table to track contracts instead
@@ -1091,6 +1095,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             price: orderData.price,
             type: orderData.side,
             is_demo: isDemo,
+            cycle: 0,
           });
           if (error) throw error;
 
@@ -1138,6 +1143,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           price: orderData.price,
           type: orderData.side,
           is_demo: isDemo,
+          cycle: 0,
         });
 
         if (error) throw error;
@@ -1187,6 +1193,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           total: orderData.total,
           status: "open",
           is_demo: isDemo,
+          cycle: 0,
         });
 
         if (error) throw error;
@@ -1506,17 +1513,36 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             .order("timestamp", { ascending: false })
             .limit(1);
 
+          console.log("tradeRecords", tradeRecords);
+          console.log("findError", findError);
+
           if (!findError && tradeRecords && tradeRecords.length > 0) {
             const tradeId = tradeRecords[0].id;
-            const tradeStatus = isTie ? "tie" : isWin ? "win" : "loss";
+
+            // Calculate P/L correctly:
+            // For wins: only the profit amount (not including initial investment)
+            // For losses: loss amount (negative, the initial investment they lose)
+            // For ties: 0 (no profit, no loss - they get their investment back)
+            let pnlAmount: number;
+            if (isWin) {
+              // Win: record only the profit amount (not the total payout)
+              pnlAmount = profit; // profit = initialInvestment * payoutPercentage
+            } else if (isTie) {
+              // Tie: no profit, no loss (they get their investment back)
+              pnlAmount = 0;
+            } else {
+              // Loss: record the loss amount (negative, what they lose)
+              pnlAmount = -contract.initialInvestment!;
+            }
 
             const updateData: Record<string, unknown> = {
               exit_price: contract.currentPrice,
               payout: payoutAmount,
-              profit: isWin ? profit : isTie ? 0 : -contract.initialInvestment!,
-              status: tradeStatus,
+              p_l: pnlAmount, // P/L field: profit for wins, negative loss for losses, 0 for ties
+              status: isWin ? "win" : isTie ? "tie" : "loss", // Status is always "closed" when timer finishes
               // Note: close_time column doesn't exist, using timestamp is sufficient
             };
+            console.log("updateData", updateData);
 
             const { error: updateError } = await supabase
               .from("trades")

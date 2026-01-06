@@ -25,17 +25,18 @@ import {
 import ChartIntervalSelector from "@/components/ChartIntervalSelector";
 import FavoriteIntervalFilters from "@/components/FavoriteIntervalFilters";
 import { getAllUserWallets, formatUSDT } from "@/lib/usdtWalletUtils";
+import { fetchTrades } from "@/lib/tradesService";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const {
-    getTotalPnL,
     getEquity,
     getOpenPositionsCount,
     getTotalTrades,
     getWinRate,
     positions,
     orderHistory,
+    isDemo,
   } = useTradingStore();
   const user = useAuthStore((state) => state.user);
   const [isPanelsOpen, setIsPanelsOpen] = useState(true);
@@ -56,6 +57,29 @@ const Dashboard = () => {
   // Calculate total balance from all network wallets
   const totalWalletBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
 
+  // Fetch all trades to calculate Total P&L
+  const { data: allTrades = [] } = useQuery({
+    queryKey: ["dashboard-trades", user?.id, isDemo],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      return await fetchTrades({
+        userId: user.id,
+        isDemo,
+        limit: 10000, // Fetch all trades for P&L calculation
+      });
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 5, // 5 seconds stale time
+    refetchInterval: 10000, // Auto-refetch every 10 seconds
+  });
+
+  // Calculate Total P&L from trades table (sum of p_l field)
+  const totalPnL = allTrades.reduce((sum, trade) => {
+    // Use p_l field if available, fallback to profit field
+    const pnl = trade.p_l ?? trade.profit ?? 0;
+    return sum + (pnl || 0);
+  }, 0);
+
   const { data: cryptos, isLoading } = useQuery({
     queryKey: ["topCryptos"],
     queryFn: () => fetchTopCryptos(20),
@@ -63,7 +87,6 @@ const Dashboard = () => {
   });
 
   // Use computed statistics for real-time updates
-  const totalPnL = getTotalPnL();
   const equity = getEquity();
   const openPositions = getOpenPositionsCount();
   const totalTrades = getTotalTrades();
@@ -136,37 +159,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Trading Panels (Collapsible) */}
-      {(positions.length > 0 || orderHistory.length > 0) && (
-        <Collapsible
-          open={isPanelsOpen}
-          onOpenChange={setIsPanelsOpen}
-          className="space-y-2"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">
-              Active Orders & Positions
-            </h2>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-9 p-0">
-                {isPanelsOpen ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-                <span className="sr-only">Toggle</span>
-              </Button>
-            </CollapsibleTrigger>
-          </div>
-          <CollapsibleContent className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <PositionsPanel />
-              <OrdersPanel />
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
       {/* Favorite Chart & Activity Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-card border border-border rounded-lg p-4 h-[500px]">
@@ -176,7 +168,7 @@ const Dashboard = () => {
                 Favorite Chart
               </h2>
               <div className="flex items-center gap-3">
-            <div className="text-sm text-muted-foreground">BTC/USD</div>
+                <div className="text-sm text-muted-foreground">BTC/USD</div>
               </div>
             </div>
             {/* Favorite Interval Filters */}

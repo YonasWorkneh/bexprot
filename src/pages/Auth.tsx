@@ -45,7 +45,7 @@ const Auth = () => {
     if (isAuthenticated) {
       // Small delay to allow state to settle
       const timer = setTimeout(() => {
-        navigate("/");
+        navigate("/dashboard");
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -62,12 +62,12 @@ const Auth = () => {
       console.log("Login result:", result);
 
       if (result.success) {
-        console.log("Login successful, navigating to /");
+        console.log("Login successful, navigating to /dashboard");
         toast({
           title: "Success",
           description: "Welcome back!",
         });
-        navigate("/");
+        navigate("/dashboard");
       } else {
         console.error("Login failed:", result.error);
         toast({

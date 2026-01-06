@@ -70,8 +70,8 @@ const SwapModal = () => {
   const currencyToIcon: Record<string, string> = {
     BTC: "/crypto-icons/btc.png",
     ETH: "/crypto-icons/eth.png",
-    USDT_TRC20: "", // Will use custom "T" icon
-    USDT: "", // Will use custom "T" icon
+    USDT_TRC20: "/crypto-icons/usdt.png",
+    USDT: "/crypto-icons/usdt.png",
     USDC_ERC20: "/crypto-icons/usdc.png",
     USDC: "/crypto-icons/usdc.png",
     XRP: "/crypto-icons/xrp.png",
@@ -463,18 +463,12 @@ const SwapModal = () => {
                     >
                       {fromAsset ? (
                         <>
-                          {fromAsset.currency === "USDT" ||
-                          fromAsset.currency === "USDT_TRC20" ? (
-                            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-[10px] text-white font-bold">
-                              T
-                            </div>
-                          ) : (
-                            <img
-                              src={fromAsset.image}
-                              alt={fromAsset.symbol}
-                              className="w-5 h-5 rounded-full"
-                            />
-                          )}
+                          <img
+                            src={fromAsset.image}
+                            alt={fromAsset.symbol}
+                            className="w-5 h-5 rounded-full"
+                          />
+
                           <span className="font-bold text-sm">
                             {fromAsset.symbol.toUpperCase()}
                           </span>
@@ -513,18 +507,12 @@ const SwapModal = () => {
                               setFromSearchQuery("");
                             }}
                           >
-                            {asset.currency === "USDT" ||
-                            asset.currency === "USDT_TRC20" ? (
-                              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-[10px] text-white font-bold">
-                                T
-                              </div>
-                            ) : (
-                              <img
-                                src={asset.image}
-                                alt={asset.name}
-                                className="w-8 h-8 rounded-full"
-                              />
-                            )}
+                            <img
+                              src={asset.image}
+                              alt={asset.name}
+                              className="w-8 h-8 rounded-full"
+                            />
+
                             <div className="flex-1">
                               <div className="font-bold">
                                 {asset.symbol.toUpperCase()}
@@ -581,18 +569,12 @@ const SwapModal = () => {
                     >
                       {toAsset ? (
                         <>
-                          {toAsset.currency === "USDT" ||
-                          toAsset.currency === "USDT_TRC20" ? (
-                            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-[10px] text-white font-bold">
-                              T
-                            </div>
-                          ) : (
-                            <img
-                              src={toAsset.image}
-                              alt={toAsset.symbol}
-                              className="w-5 h-5 rounded-full"
-                            />
-                          )}
+                          <img
+                            src={toAsset.image}
+                            alt={toAsset.symbol}
+                            className="w-5 h-5 rounded-full"
+                          />
+
                           <span className="font-bold text-sm">
                             {toAsset.symbol.toUpperCase()}
                           </span>
@@ -631,18 +613,12 @@ const SwapModal = () => {
                               setToSearchQuery("");
                             }}
                           >
-                            {asset.currency === "USDT" ||
-                            asset.currency === "USDT_TRC20" ? (
-                              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-[10px] text-white font-bold">
-                                T
-                              </div>
-                            ) : (
-                              <img
-                                src={asset.image}
-                                alt={asset.name}
-                                className="w-8 h-8 rounded-full"
-                              />
-                            )}
+                            <img
+                              src={asset.image}
+                              alt={asset.name}
+                              className="w-8 h-8 rounded-full"
+                            />
+
                             <div className="flex-1">
                               <div className="font-bold">
                                 {asset.symbol.toUpperCase()}

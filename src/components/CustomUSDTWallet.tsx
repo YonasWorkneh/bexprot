@@ -370,39 +370,11 @@ const CustomUSDTWallet = () => {
                             ${formatUSDT(wallet.balance)}
                           </p>
                         </div>
-                        <div className="flex items-center justify-between pt-3 border-t">
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {wallet.address.slice(0, 6)}...
-                            {wallet.address.slice(-4)}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copyAddress(wallet.address);
-                            }}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
                       </CardContent>
                     </Card>
                   );
                 })}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Transaction History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
-          <CardDescription>Recent Bexprot transactions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <USDTTransactionHistory userId={user.id} onRefresh={loadWallets} />
         </CardContent>
       </Card>
 
@@ -456,6 +428,17 @@ const CustomUSDTWallet = () => {
         </CardHeader>
         <CardContent>
           <UserDepositHistory userId={user.id} />
+        </CardContent>
+      </Card>
+
+      {/* Transaction History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Transaction History</CardTitle>
+          <CardDescription>Recent Bexprot transactions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <USDTTransactionHistory userId={user.id} onRefresh={loadWallets} />
         </CardContent>
       </Card>
 

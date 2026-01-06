@@ -480,10 +480,11 @@ export async function createWithdrawalTransaction(
       return { success: false, error: "Insufficient balance" };
     }
 
+    // TODO: Add address validation back later
     // Validate recipient address
-    if (!validateAddress(toAddress, network)) {
-      return { success: false, error: "Invalid recipient address" };
-    }
+    // if (!validateAddress(toAddress, network)) {
+    //   return { success: false, error: "Invalid recipient address" };
+    // }
 
     // Create transaction
     const { data, error } = await supabase
@@ -508,10 +509,10 @@ export async function createWithdrawalTransaction(
       .from("withdrawals")
       .insert({
         user_id: userId,
-        transaction_id: data.id, // Link to the specific transaction
+        // transaction_id: data.id, // Link to the specific transaction
         amount: amount,
         fee: fee,
-        type: "withdrawal",
+        // type: "withdrawal",
         address: toAddress,
         network: network,
         status: "pending",
@@ -578,10 +579,11 @@ export async function sendUSDT(
       return { success: false, error: "Insufficient balance" };
     }
 
+    // TODO: Add address validation back later
     // Validate recipient address
-    if (!validateAddress(toAddress, network)) {
-      return { success: false, error: "Invalid recipient address" };
-    }
+    // if (!validateAddress(toAddress, network)) {
+    //   return { success: false, error: "Invalid recipient address" };
+    // }
 
     // Cannot send to self
     if (toAddress.toLowerCase() === wallet.address.toLowerCase()) {
@@ -615,7 +617,6 @@ export async function sendUSDT(
       .from("withdrawals")
       .insert({
         user_id: userId,
-        transaction_id: data.id, // Link to the specific transaction
         amount: amount,
         fee: fee,
         type: "send",

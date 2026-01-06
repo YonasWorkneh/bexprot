@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const MainLayout = () => {
-  const { user, updatePreferences } = useAuthStore();
+  const { user, updatePreferences, isAuthenticated } = useAuthStore();
   const [showWelcome, setShowWelcome] = useState(false);
   const [hasCheckedWelcome, setHasCheckedWelcome] = useState(false);
   const navigate = useNavigate();
@@ -74,6 +74,20 @@ const MainLayout = () => {
 
   console.log("MainLayout Rendered");
 
+  // If not authenticated, render only the outlet (no sidebar/topbar)
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen w-full bg-background text-foreground">
+        <main className="flex-1 overflow-auto p-0">
+          <div className="animate-in fade-in duration-500 slide-in-from-bottom-4">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Authenticated: render full layout with sidebar and topbar
   return (
     <SidebarProvider defaultOpen={true}>
       <PriceUpdater />

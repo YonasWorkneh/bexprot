@@ -10,7 +10,7 @@ const SupportChatButton = () => {
     <>
       {/* Floating Support Button */}
       <div
-        className="fixed bottom-6 right-6 z-50 cursor-pointer"
+        className="fixed bottom-20 md:bottom-6 right-6 z-50 cursor-pointer "
         onClick={() => setOpen(true)}
       >
         <img src="/customer-support.png" alt="Support" className="h-14 w-14" />

@@ -14,6 +14,7 @@ import ChartIntervalSelector from "@/components/ChartIntervalSelector";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTradingStore } from "@/store/tradingStore";
+import { useAuthStore } from "@/store/authStore";
 import {
   Loader2,
   X,
@@ -26,6 +27,7 @@ import {
 import { formatBalance } from "@/lib/walletUtils";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { fetchTrades, type Trade } from "@/lib/tradesService";
 
 const Trade = () => {
   const [selectedAsset, setSelectedAsset] = useState("bitcoin");
@@ -40,8 +42,15 @@ const Trade = () => {
 
   const [timeframe, setTimeframe] = useState(1); // Default 1 day for chart data fetch (not used for TV widget)
   const [showTradeMarkers, setShowTradeMarkers] = useState(true);
-  const { orders, positions, cancelOrder, closePosition, systemSettings } =
-    useTradingStore();
+  const {
+    orders,
+    positions,
+    cancelOrder,
+    closePosition,
+    systemSettings,
+    isDemo,
+  } = useTradingStore();
+  const { user } = useAuthStore();
 
   // Fetch data based on asset type
   const { data: cryptos } = useQuery({
@@ -207,7 +216,45 @@ const Trade = () => {
     "spot" | "futures" | "contract"
   >("spot");
 
-  // ... (existing code)
+  // Get current asset ID for filtering trades
+  const currentAssetId =
+    assetType === "crypto"
+      ? `crypto_${selectedAsset}`
+      : `${assetType}_${selectedAsset}`;
+
+  // Fetch trade history using React Query
+  const {
+    data: trades = [],
+    isLoading: tradesLoading,
+    error: tradesError,
+  } = useQuery({
+    queryKey: ["trades", user?.id, isDemo, currentAssetId],
+    queryFn: () =>
+      fetchTrades({
+        userId: user?.id || "",
+        isDemo,
+        assetId: currentAssetId,
+        limit: 100,
+      }),
+    enabled: !!user?.id,
+    staleTime: 30000, // 30 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Format asset name from trade asset field
+  // Assets are stored as "crypto_bitcoin", "stock_AAPL", etc.
+  const getAssetDisplayName = (asset: string): string => {
+    if (asset.includes("_")) {
+      const parts = asset.split("_");
+      const assetName = parts.slice(1).join("_");
+      // For crypto, capitalize; for others, keep original case
+      if (parts[0] === "crypto") {
+        return assetName.toUpperCase();
+      }
+      return assetName;
+    }
+    return asset.toUpperCase();
+  };
 
   return (
     <div className="p-4 md:p-6 min-h-[calc(100vh-3.5rem)] flex flex-col">
@@ -389,7 +436,7 @@ const Trade = () => {
                     value="orders"
                     className="data-[state=active]:bg-secondary"
                   >
-                    Open Orders
+                    History
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -469,75 +516,141 @@ const Trade = () => {
                 value="orders"
                 className="flex-1 overflow-auto p-0 m-0"
               >
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-secondary/50 text-muted-foreground sticky top-0">
-                    <tr>
-                      <th className="p-3 font-medium">Asset</th>
-                      <th className="p-3 font-medium">Type</th>
-                      <th className="p-3 font-medium">Side</th>
-                      <th className="p-3 font-medium">Price</th>
-                      <th className="p-3 font-medium">Amount</th>
-                      <th className="p-3 font-medium">Total</th>
-                      <th className="p-3 font-medium text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {orders.length > 0 ? (
-                      orders.map((order) => (
-                        <tr key={order.id} className="hover:bg-secondary/20">
-                          <td className="p-3 font-medium">{order.assetName}</td>
-                          <td className="p-3 capitalize">{order.type}</td>
-                          <td
-                            className={`p-3 capitalize ${
-                              order.side === "buy"
-                                ? "text-green-500"
-                                : "text-red-500"
-                            }`}
-                          >
-                            {order.side}
-                          </td>
-                          <td className="p-3 font-mono">
-                            ${formatBalance(order.price)}
-                          </td>
-                          <td className="p-3 font-mono">{order.amount}</td>
-                          <td className="p-3 font-mono">
-                            ${formatBalance(order.total)}
-                          </td>
-                          <td className="p-3 text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => cancelOrder(order.id)}
+                {tradesLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : tradesError ? (
+                  <div className="p-8 text-center text-destructive">
+                    <p>Failed to load trade history</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Please try again later
+                    </p>
+                  </div>
+                ) : (
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-secondary/50 text-muted-foreground sticky top-0">
+                      <tr>
+                        <th className="p-3 font-medium">Asset</th>
+                        <th className="p-3 font-medium">Type</th>
+                        <th className="p-3 font-medium">Side</th>
+                        <th className="p-3 font-medium">Quantity</th>
+                        <th className="p-3 font-medium">Open price</th>
+                        <th className="p-3 font-medium">Close price</th>
+                        <th className="p-3 font-medium">Profit/Loss</th>
+                        <th className="p-3 font-medium">Cycle (seconds)</th>
+                        <th className="p-3 font-medium">Status</th>
+                        <th className="p-3 font-medium">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {trades.length > 0 ? (
+                        trades.map((trade) => {
+                          const total = trade.quantity * trade.price;
+                          const profit = trade.p_l ?? trade.profit ?? null; // Use p_l field, fallback to profit for backward compatibility
+                          const status = trade.status || null;
+
+                          return (
+                            <tr
+                              key={trade.id}
+                              className="hover:bg-secondary/20"
                             >
-                              <X size={16} />
-                            </Button>
+                              <td className="p-3 font-medium">
+                                {getAssetDisplayName(trade.asset)}
+                              </td>
+                              <td className="p-3 capitalize">
+                                {trade.is_demo ? "Demo" : "Live"}
+                              </td>
+                              <td
+                                className={`p-3 capitalize ${
+                                  trade.type === "buy"
+                                    ? "text-green-500"
+                                    : "text-red-500"
+                                }`}
+                              >
+                                {trade.type}
+                              </td>
+                              <td className="p-3 font-mono">
+                                {formatBalance(trade.quantity)}
+                              </td>
+                              <td className="p-3 font-mono">
+                                ${formatBalance(trade.price)}
+                              </td>
+                              <td className="p-3 font-mono">
+                                ${formatBalance(total)}
+                              </td>
+                              <td
+                                className={`p-3 font-mono ${
+                                  profit !== null
+                                    ? profit >= 0
+                                      ? "text-green-500"
+                                      : "text-red-500"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                {profit !== null
+                                  ? `${profit >= 0 ? "+" : ""}$${formatBalance(
+                                      profit
+                                    )}`
+                                  : "-"}
+                              </td>
+                              <td className="p-3 font-mono">
+                                {trade.cycle !== null &&
+                                trade.cycle !== undefined
+                                  ? trade.cycle
+                                  : "-"}
+                              </td>
+                              <td className="p-3">
+                                {status ? (
+                                  <span
+                                    className={`px-2 py-1 rounded text-xs capitalize ${
+                                      status === "win"
+                                        ? "bg-green-500/20 text-green-500"
+                                        : status === "loss"
+                                        ? "bg-red-500/20 text-red-500"
+                                        : status === "tie"
+                                        ? "bg-yellow-500/20 text-yellow-500"
+                                        : "bg-blue-500/20 text-blue-500"
+                                    }`}
+                                  >
+                                    {status}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">
+                                    -
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3 text-xs text-muted-foreground">
+                                {new Date(trade.timestamp).toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={9}
+                            className="p-8 text-center text-muted-foreground"
+                          >
+                            No trade history
                           </td>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="p-8 text-center text-muted-foreground"
-                        >
-                          No open orders
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                      )}
+                    </tbody>
+                  </table>
+                )}
               </TabsContent>
             </Tabs>
           </div>
 
           {/* Trade History Panel */}
-          <div>
+          {/* <div>
             <TradeHistoryPanel
               assetId={assetType === "crypto" ? selectedAsset : assetSymbol}
               assetName={assetName}
             />
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

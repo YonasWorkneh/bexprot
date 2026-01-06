@@ -45,6 +45,11 @@ const NotificationDetail = lazy(() => import("./pages/NotificationDetail"));
 const TransactionDetail = lazy(() => import("./pages/TransactionDetail"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
 const TestDeposit = lazy(() => import("./pages/TestDeposit"));
+const HomeRoute = lazy(() => import("./components/HomeRoute"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const TradingGuide = lazy(() => import("./pages/TradingGuide"));
+const MarketAnalysis = lazy(() => import("./pages/MarketAnalysis"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -217,21 +222,26 @@ const App = () => {
                     </AdminProtectedRoute>
                   }
                 />
+                <Route path="/" element={<HomeRoute />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/terms-of-service" element={<TermsOfService />} />
+                <Route path="/trading-guide" element={<TradingGuide />} />
+                <Route path="/market-analysis" element={<MarketAnalysis />} />
                 <Route element={<MainLayout />}>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/markets" element={<Markets />} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="/trade"
                     element={
                       <ProtectedRoute>
                         <Trade />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/markets"
-                    element={
-                      <ProtectedRoute>
-                        <Markets />
                       </ProtectedRoute>
                     }
                   />

@@ -35,7 +35,7 @@ interface Withdrawal {
   network: string;
   fee: number;
   type: "withdrawal" | "send";
-  status: "pending" | "completed" | "rejected";
+  status: "pending" | "approved" | "completed" | "rejected";
   created_at: string;
   user?: {
     email: string;
@@ -241,7 +241,7 @@ const AdminWithdrawalsPanel = () => {
                 <TableCell>
                   <Badge
                     className={`capitalize ${
-                      withdrawal.status === "completed"
+                      withdrawal.status === "completed" || withdrawal.status === "approved"
                         ? "bg-green-500/15 text-green-600 border-green-200"
                         : withdrawal.status === "pending"
                         ? "bg-yellow-500/15 text-yellow-600 border-yellow-200"

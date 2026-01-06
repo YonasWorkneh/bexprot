@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { User, RefreshCw, Upload, Camera } from "lucide-react";
+import { User, RefreshCw, Upload, Camera, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTradingStore } from "@/store/tradingStore";
 import { useState, useRef, useEffect } from "react";
@@ -11,12 +11,14 @@ import { supabase } from "@/lib/supabase";
 
 const Profile = () => {
   const user = useAuthStore((state) => state.user);
-  const { isDemo, toggleDemoMode, resetDemoAccount, demoBalance } = useTradingStore();
+  const { isDemo, toggleDemoMode, resetDemoAccount, demoBalance } =
+    useTradingStore();
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState(user?.preferences?.phone || "");
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || "");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [totalTrades, setTotalTrades] = useState(0);
 
@@ -27,20 +29,29 @@ const Profile = () => {
 
       try {
         const { count, error } = await supabase
-          .from('orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id);
 
         if (!error && count !== null) {
           setTotalTrades(count);
         }
       } catch (error) {
-        console.error('Error fetching total trades:', error);
+        console.error("Error fetching total trades:", error);
       }
     };
 
     fetchTotalTrades();
   }, [user?.id]);
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -48,73 +59,80 @@ const Profile = () => {
       if (!file) return;
 
       // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast.error('Please upload an image file (JPG, PNG, GIF)');
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please upload an image file (JPG, PNG, GIF)");
         return;
       }
 
       // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size must be less than 5MB');
+        toast.error("Image size must be less than 5MB");
         return;
       }
 
+      // Create preview URL immediately
+      const preview = URL.createObjectURL(file);
+      setPreviewUrl(preview);
+
       setUploading(true);
-      toast.loading('Uploading profile picture...');
+      toast.loading("Uploading profile picture...");
 
       // Create unique file name with user ID
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`; // Store directly in the bucket root or a folder if configured
 
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('profiles')
+        .from("avatars")
         .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true // Allow overwriting if filename collision (unlikely with timestamp)
+          cacheControl: "3600",
+          upsert: true, // Allow overwriting if filename collision (unlikely with timestamp)
         });
 
       if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw new Error(uploadError.message || 'Failed to upload file');
+        console.error("Upload error:", uploadError);
+        throw new Error(uploadError.message || "Failed to upload file");
       }
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('profiles')
-        .getPublicUrl(filePath);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-      console.log('Public URL:', publicUrl);
+      console.log("Public URL:", publicUrl);
 
       // Update user profile in database
       const { error: updateError } = await supabase
-        .from('users')
+        .from("users")
         .update({ avatar_url: publicUrl })
-        .eq('id', user?.id);
+        .eq("id", user?.id);
 
       if (updateError) {
-        console.error('Database update error:', updateError);
-        throw new Error(updateError.message || 'Failed to update profile');
+        console.error("Database update error:", updateError);
+        throw new Error(updateError.message || "Failed to update profile");
       }
 
       // Update local state
       setAvatarUrl(publicUrl);
+      setPreviewUrl(null); // Clear preview URL
       useAuthStore.setState({
-        user: { ...user!, avatarUrl: publicUrl }
+        user: { ...user!, avatarUrl: publicUrl },
       });
 
       toast.dismiss();
-      toast.success('Profile picture updated successfully! 🎉');
+      toast.success("Profile picture updated successfully! 🎉");
     } catch (error: any) {
-      console.error('Error uploading avatar:', error);
+      console.error("Error uploading avatar:", error);
       toast.dismiss();
-      toast.error(error.message || 'Failed to upload profile picture');
+      toast.error(error.message || "Failed to upload profile picture");
+      // Clear preview on error
+      setPreviewUrl(null);
     } finally {
       setUploading(false);
       // Reset file input
       if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        fileInputRef.current.value = "";
       }
     }
   };
@@ -129,7 +147,7 @@ const Profile = () => {
       const currentPreferences = user.preferences || {};
       const newPreferences = {
         ...currentPreferences,
-        phone: phone
+        phone: phone,
       };
 
       // Update using store action which handles both DB and local state
@@ -144,25 +162,25 @@ const Profile = () => {
       // Also update name if changed
       if (name !== user.name) {
         const { error } = await supabase
-          .from('users')
+          .from("users")
           .update({ name })
-          .eq('id', user.id);
-          
+          .eq("id", user.id);
+
         if (error) {
           toast.dismiss();
           throw error;
         }
-        
+
         // Update local user state for name
         useAuthStore.setState({
-            user: { ...user, name, preferences: newPreferences }
+          user: { ...user, name, preferences: newPreferences },
         });
       }
 
       // Update email if changed (via Supabase Auth)
       if (email !== user.email) {
         const { error: emailError } = await supabase.auth.updateUser({
-          email: email
+          email: email,
         });
 
         if (emailError) {
@@ -172,9 +190,9 @@ const Profile = () => {
 
         // Update email in users table and local state
         const { error } = await supabase
-          .from('users')
+          .from("users")
           .update({ email })
-          .eq('id', user.id);
+          .eq("id", user.id);
 
         if (error) {
           toast.dismiss();
@@ -182,32 +200,41 @@ const Profile = () => {
         }
 
         useAuthStore.setState({
-          user: { ...user, name, email, preferences: newPreferences }
+          user: { ...user, name, email, preferences: newPreferences },
         });
 
         toast.dismiss();
-        toast.success("Profile updated! Please check your new email to confirm the change.");
+        toast.success(
+          "Profile updated! Please check your new email to confirm the change."
+        );
         return;
       }
 
       toast.dismiss();
       toast.success("Profile updated successfully");
     } catch (error: any) {
-      console.error('Error saving profile:', error);
+      console.error("Error saving profile:", error);
       toast.dismiss();
       toast.error(error.message || "Failed to update profile");
     }
   };
 
   const handleResetDemo = () => {
-    if (confirm("Are you sure you want to reset your demo account? This will clear all demo trades and reset balance to $100,000.")) {
+    if (
+      confirm(
+        "Are you sure you want to reset your demo account? This will clear all demo trades and reset balance to $100,000."
+      )
+    ) {
       resetDemoAccount();
       toast.success("Demo account reset successfully");
     }
   };
 
   const memberSince = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    ? new Date(user.createdAt).toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      })
     : "January 2024";
 
   return (
@@ -218,12 +245,20 @@ const Profile = () => {
       </div>
 
       <div className="max-w-2xl">
-
-
         <div className="bg-card border border-border rounded-xl p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
             <div className="relative w-20 h-20 group">
-              {avatarUrl ? (
+              {uploading ? (
+                <div className="w-20 h-20 bg-secondary rounded-xl flex items-center justify-center">
+                  <Loader2 className="text-primary animate-spin" size={32} />
+                </div>
+              ) : previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt="Profile preview"
+                  className="w-20 h-20 rounded-xl object-cover"
+                />
+              ) : avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt="Profile"
@@ -234,11 +269,14 @@ const Profile = () => {
                   <User size={40} className="text-muted-foreground" />
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Camera className="text-white" size={24} />
-              </div>
+              {!uploading && (
+                <div
+                  className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Camera className="text-white" size={24} />
+                </div>
+              )}
             </div>
             <div>
               <input
@@ -256,7 +294,7 @@ const Profile = () => {
               >
                 {uploading ? (
                   <>
-                    <Upload className="mr-2 h-4 w-4 animate-pulse" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Uploading...
                   </>
                 ) : (
@@ -266,13 +304,17 @@ const Profile = () => {
                   </>
                 )}
               </Button>
-              <div className="text-xs text-muted-foreground">JPG, PNG up to 5MB</div>
+              <div className="text-xs text-muted-foreground">
+                JPG, PNG up to 5MB
+              </div>
             </div>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-muted-foreground mb-2 block">Full Name</label>
+              <label className="text-sm text-muted-foreground mb-2 block">
+                Full Name
+              </label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -281,7 +323,9 @@ const Profile = () => {
             </div>
 
             <div>
-              <label className="text-sm text-muted-foreground mb-2 block">Email</label>
+              <label className="text-sm text-muted-foreground mb-2 block">
+                Email
+              </label>
               <Input
                 type="email"
                 value={email}
@@ -291,7 +335,9 @@ const Profile = () => {
             </div>
 
             <div>
-              <label className="text-sm text-muted-foreground mb-2 block">Phone</label>
+              <label className="text-sm text-muted-foreground mb-2 block">
+                Phone
+              </label>
               <Input
                 type="tel"
                 value={phone}
@@ -301,47 +347,77 @@ const Profile = () => {
               />
             </div>
 
-            <Button onClick={handleSave} className="bg-primary text-foreground hover:bg-primary/90">
+            <Button
+              onClick={handleSave}
+              className="bg-primary text-foreground hover:bg-primary/90"
+            >
               Save Changes
             </Button>
           </div>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Account Stats</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">
+            Account Stats
+          </h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <div className="text-sm text-muted-foreground mb-1">Member Since</div>
-              <div className="text-lg font-semibold text-foreground">{memberSince}</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">Total Trades</div>
-              <div className="text-lg font-semibold text-foreground">{totalTrades}</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">Verification Status</div>
-              <div className="text-lg font-semibold text-warning">
-                {user?.kycStatus === "verified" ? "Verified" : user?.kycStatus === "pending" ? "Pending" : "Not Started"}
+              <div className="text-sm text-muted-foreground mb-1">
+                Member Since
+              </div>
+              <div className="text-lg font-semibold text-foreground">
+                {memberSince}
               </div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-1">Account Type</div>
-              <div className="text-lg font-semibold text-foreground">{isDemo ? "Demo" : "Live"}</div>
+              <div className="text-sm text-muted-foreground mb-1">
+                Total Trades
+              </div>
+              <div className="text-lg font-semibold text-foreground">
+                {totalTrades}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground mb-1">
+                Verification Status
+              </div>
+              <div className="text-lg font-semibold text-warning">
+                {user?.kycStatus === "verified"
+                  ? "Verified"
+                  : user?.kycStatus === "pending"
+                  ? "Pending"
+                  : "Not Started"}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground mb-1">
+                Account Type
+              </div>
+              <div className="text-lg font-semibold text-foreground">
+                {isDemo ? "Demo" : "Live"}
+              </div>
             </div>
           </div>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-6 mt-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">KYC Verification</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">
+            KYC Verification
+          </h2>
           <p className="text-muted-foreground mb-4">
-            Complete your KYC verification to unlock full trading features and higher limits.
+            Complete your KYC verification to unlock full trading features and
+            higher limits.
           </p>
           <Button
-            onClick={() => window.location.href = "/kyc"}
+            onClick={() => (window.location.href = "/kyc")}
             variant={user?.kycStatus === "verified" ? "outline" : "default"}
             className="bg-primary text-foreground hover:bg-primary/90 rounded-xl"
           >
-            {user?.kycStatus === "verified" ? "View KYC Details" : user?.kycStatus === "pending" ? "KYC Under Review" : "Start KYC Verification"}
+            {user?.kycStatus === "verified"
+              ? "View KYC Details"
+              : user?.kycStatus === "pending"
+              ? "KYC Under Review"
+              : "Start KYC Verification"}
           </Button>
         </div>
       </div>

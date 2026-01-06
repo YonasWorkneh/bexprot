@@ -56,11 +56,21 @@ export async function getDepositAddresses(): Promise<{ success: boolean; data?: 
 }
 
 /**
- * Get user's deposit history
+ * Get user's deposit history with pagination
  */
-export async function getUserDeposits(userId: string): Promise<{ success: boolean; data?: CryptoDeposit[]; error?: string }> {
+export async function getUserDeposits(
+  userId: string,
+  options?: { page?: number; limit?: number; status?: string }
+): Promise<{ success: boolean; data?: CryptoDeposit[]; total?: number; error?: string }> {
   try {
-    const { data, error } = await supabase
+    const page = options?.page || 1;
+    const limit = options?.limit || 15;
+    const offset = (page - 1) * limit;
+
+    // Handle debit filter differently (requires fetching all and filtering)
+    if (options?.status === 'debit') {
+      // Fetch all deposits and filter for debits, then paginate in memory
+      const { data: allData, error } = await supabase
       .from('crypto_deposits')
       .select('*')
       .eq('user_id', userId)
@@ -68,9 +78,75 @@ export async function getUserDeposits(userId: string): Promise<{ success: boolea
 
     if (error) throw error;
 
+      const debitDeposits = (allData || [])
+        .filter(d => parseFloat(d.amount) < 0)
+        .map(deposit => ({
+          id: deposit.id,
+          userId: deposit.user_id,
+          depositCode: deposit.deposit_code,
+          currency: deposit.currency,
+          depositAddress: deposit.deposit_address,
+          transactionHash: deposit.transaction_hash,
+          userReportedAmount: deposit.user_reported_amount ? parseFloat(deposit.user_reported_amount) : undefined,
+          adminVerifiedAmount: deposit.admin_verified_amount ? parseFloat(deposit.admin_verified_amount) : undefined,
+          amount: parseFloat(deposit.amount),
+          amountUsd: parseFloat(deposit.amount_usd),
+          status: deposit.status,
+          confirmations: deposit.confirmations,
+          blockchainExplorerUrl: deposit.blockchain_explorer_url,
+          notes: deposit.notes,
+          verificationNotes: deposit.verification_notes,
+          reportedAt: deposit.reported_at,
+          verifiedAt: deposit.verified_at,
+          creditedAt: deposit.credited_at,
+          verifiedBy: deposit.verified_by,
+          createdAt: deposit.created_at,
+          updatedAt: deposit.updated_at,
+          screenshotUrl: deposit.screenshot_url,
+        }));
+
+      const totalCount = debitDeposits.length;
+      const paginatedDeposits = debitDeposits.slice(offset, offset + limit);
+
     return {
       success: true,
-      data: data.map(deposit => ({
+        data: paginatedDeposits,
+        total: totalCount,
+      };
+    }
+
+    // For other filters, use database-level pagination
+    // First, get total count
+    let countQuery = supabase
+      .from('crypto_deposits')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (options?.status && options.status !== 'all') {
+      countQuery = countQuery.eq('status', options.status);
+    }
+
+    const { count, error: countError } = await countQuery;
+
+    if (countError) throw countError;
+
+    // Then, get paginated data
+    let query = supabase
+      .from('crypto_deposits')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (options?.status && options.status !== 'all') {
+      query = query.eq('status', options.status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    const deposits = (data || []).map(deposit => ({
         id: deposit.id,
         userId: deposit.user_id,
         depositCode: deposit.deposit_code,
@@ -93,7 +169,12 @@ export async function getUserDeposits(userId: string): Promise<{ success: boolea
         createdAt: deposit.created_at,
         updatedAt: deposit.updated_at,
         screenshotUrl: deposit.screenshot_url,
-      })),
+    }));
+
+    return {
+      success: true,
+      data: deposits,
+      total: count || 0,
     };
   } catch (error: any) {
     console.error('Error fetching user deposits:', error);

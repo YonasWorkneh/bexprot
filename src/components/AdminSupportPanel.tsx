@@ -94,7 +94,10 @@ const AdminSupportPanel = () => {
   }, [refetchTickets]);
 
   const handleSendReply = async () => {
-    if (!user?.id || !selectedTicket || !replyMessage.trim()) return;
+    if (!user?.id || !selectedTicket) return;
+    
+    // Allow sending with just an image or just a message, but require at least one
+    if (!replyMessage.trim() && !imageFile) return;
 
     setSending(true);
 
@@ -111,7 +114,7 @@ const AdminSupportPanel = () => {
       const result = await sendSupportMessage(
         selectedTicket.id,
         user.id,
-        replyMessage,
+        replyMessage.trim() || "", // Allow empty message if image is present
         true, // is_admin_reply
         imageUrl
       );
@@ -453,6 +456,7 @@ const AdminSupportPanel = () => {
                       <Button
                         onClick={handleSendReply}
                         disabled={sending || (!replyMessage.trim() && !imageFile)}
+                        title={!replyMessage.trim() && !imageFile ? "Enter a message or attach an image" : ""}
                       >
                         {sending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />

@@ -8,23 +8,23 @@ import { useAuthStore } from "@/store/authStore";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { formatUSDT } from "@/lib/usdtWalletUtils";
-import { Loader2, Clock, TrendingUp, TrendingDown } from "lucide-react";
+import { formatUSDT, getAllUserWallets } from "@/lib/usdtWalletUtils";
+import {
+  Loader2,
+  Clock,
+  TrendingUp,
+  TrendingDown,
+  ArrowRightLeft,
+} from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+import USDTTransferDialog from "./USDTTransferDialog";
 
 interface TradingPanelProps {
   assetId: string;
   assetSymbol: string;
   currentPrice: number;
-  tradingMode: "spot" | "futures" | "contract";
+  tradingMode?: "spot" | "futures" | "contract";
 }
-
-import SwapModal from "./SwapModal";
-import CryptoDepositDialog from "./CryptoDepositDialog";
-import USDTTransferDialog from "./USDTTransferDialog";
-import USDTWithdrawDialog from "./USDTWithdrawDialog";
-import { getAllUserWallets, type USDTWallet } from "@/lib/usdtWalletUtils";
-import { ArrowDownCircle, ArrowUpCircle, ArrowRightLeft } from "lucide-react";
 
 const TradingPanel = ({
   assetId,
@@ -77,14 +77,11 @@ const TradingPanel = ({
   const [takeProfit, setTakeProfit] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Dialog states for wallet actions
-  const [cryptoDepositDialogOpen, setCryptoDepositDialogOpen] = useState(false);
+  // Dialog state for transfer
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
-  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
-  const [selectedWallet, setSelectedWallet] = useState<USDTWallet | null>(null);
 
-  // Fetch wallets for transfer/withdraw dialogs
-  const { data: wallets = [] } = useQuery<USDTWallet[]>({
+  // Fetch wallets for transfer dialog
+  const { data: wallets = [] } = useQuery({
     queryKey: ["trading-panel-wallets", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -95,13 +92,6 @@ const TradingPanel = ({
     refetchInterval: 10000,
     retry: 2,
   });
-
-  // Set selected wallet when wallets load
-  useEffect(() => {
-    if (wallets.length > 0 && !selectedWallet) {
-      setSelectedWallet(wallets[0]);
-    }
-  }, [wallets, selectedWallet]);
 
   // Futures State
   const [leverage, setLeverage] = useState(1);
@@ -157,11 +147,12 @@ const TradingPanel = ({
       return;
     }
 
-    const total = numAmount * (tradingMode === "contract" ? 1 : numPrice);
+    // For all modes, amount is in USDT, so total is just the amount
+    const total = numAmount;
 
     // Balance check (preliminary - actual check happens in placeOrder with fresh DB data)
-    // For contract mode, use trading balance directly
-    const requiresUSDT = tradingMode !== "spot" || side === "buy";
+    // All modes use USDT, so use trading balance directly (with leverage for futures)
+    const requiresUSDT = true; // All modes now use USDT
     const buyingPower =
       tradingMode === "contract"
         ? balance // For contracts, use trading balance directly
@@ -193,6 +184,11 @@ const TradingPanel = ({
       // Calculate payout based on time
       const payout = contractTime === 30 ? 20 : contractTime === 60 ? 25 : 50;
 
+      // Calculate quantity for spot/futures (amount in USDT / price = quantity)
+      // For contract mode, amount is already the USDT amount
+      const quantity =
+        tradingMode === "contract" ? numAmount : numAmount / numPrice;
+
       // Place the order and wait for result
       const result = await placeOrder({
         assetId,
@@ -200,7 +196,7 @@ const TradingPanel = ({
         type,
         side,
         price: numPrice,
-        amount: numAmount,
+        amount: quantity, // Pass quantity for spot/futures, USDT amount for contract
         total,
         mode: tradingMode,
         leverage: tradingMode === "futures" ? leverage : undefined,
@@ -242,9 +238,12 @@ const TradingPanel = ({
         } ${leverage}x placed at $${numPrice}`;
         notificationTitle = "Futures Order Placed";
       } else {
-        description = `${
-          side === "buy" ? "Bought" : "Sold"
-        } ${numAmount} ${assetSymbol.toUpperCase()} at $${numPrice}`;
+        const quantity = numAmount / numPrice;
+        description = `${side === "buy" ? "Bought" : "Sold"} ${quantity.toFixed(
+          6
+        )} ${assetSymbol.toUpperCase()} (${formatUSDT(
+          numAmount
+        )}) at $${numPrice}`;
         notificationTitle = "Spot Order Placed";
       }
 
@@ -280,9 +279,8 @@ const TradingPanel = ({
     }
   };
 
-  const total =
-    (parseFloat(amount) || 0) *
-    (type === "market" ? currentPrice : parseFloat(price) || 0);
+  // For all modes, amount is in USDT, so total is just the amount
+  const total = parseFloat(amount) || 0;
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 h-full flex flex-col">
@@ -492,11 +490,7 @@ const TradingPanel = ({
 
         {/* Amount Input */}
         <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">
-            {tradingMode === "contract"
-              ? "Amount (USDT)"
-              : `Amount (${assetSymbol.toUpperCase()})`}
-          </label>
+          <label className="text-sm text-muted-foreground">Amount (USDT)</label>
           <Input
             type="number"
             value={amount}
@@ -519,12 +513,8 @@ const TradingPanel = ({
                   if (side === "buy" || tradingMode === "futures") {
                     const buyingPower =
                       balance * (tradingMode === "futures" ? leverage : 1);
-                    const maxBuy =
-                      buyingPower /
-                      (type === "market"
-                        ? currentPrice
-                        : parseFloat(price) || currentPrice);
-                    setAmount((maxBuy * (pct / 100)).toFixed(6));
+                    // Amount is now in USDT, so directly use buying power percentage
+                    setAmount((buyingPower * (pct / 100)).toFixed(2));
                   }
                 }}
               >
@@ -539,11 +529,7 @@ const TradingPanel = ({
             <div className="flex justify-between mb-4 text-sm">
               <span className="text-muted-foreground">Total</span>
               <span className="font-mono font-semibold">
-                $
-                {total.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatUSDT(total)}
               </span>
             </div>
           )}
@@ -561,95 +547,55 @@ const TradingPanel = ({
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : tradingMode === "contract" ? (
               `${side === "buy" ? "Buy Long" : "Sell Short"} (${contractTime}s)`
+            ) : side === "buy" ? (
+              tradingMode === "futures" ? (
+                "Long"
+              ) : (
+                "Buy"
+              )
+            ) : tradingMode === "futures" ? (
+              "Short"
             ) : (
-              `${
-                side === "buy"
-                  ? tradingMode === "futures"
-                    ? "Long"
-                    : "Buy"
-                  : tradingMode === "futures"
-                  ? "Short"
-                  : "Sell"
-              } ${assetSymbol.toUpperCase()}`
+              "Sell"
             )}
           </Button>
 
-          {/* Wallet Action Buttons - Below order button (contract mode only) */}
-          {tradingMode === "contract" && (
-            <div className="grid grid-cols-2 gap-6 mt-20">
-              <SwapModal />
-              <Button
-                onClick={() => setCryptoDepositDialogOpen(true)}
-                variant="outline"
-                className="h-12 text-sm font-medium"
-              >
-                <ArrowDownCircle className="mr-2 h-5 w-5" />
-                Deposit
-              </Button>
-              <Button
-                onClick={() => setTransferDialogOpen(true)}
-                variant="outline"
-                className="h-12 text-sm font-medium"
-              >
-                <ArrowRightLeft className="mr-2 h-5 w-5" />
-                Transfer
-              </Button>
-              <Button
-                onClick={() => setWithdrawDialogOpen(true)}
-                variant="outline"
-                className="h-12 text-sm font-medium"
-              >
-                <ArrowUpCircle className="mr-2 h-5 w-5" />
-                Withdraw
-              </Button>
-            </div>
-          )}
+          {/* Transfer Button - Available in all trading modes */}
+          <Button
+            onClick={() => setTransferDialogOpen(true)}
+            variant="outline"
+            className="w-full h-12 text-sm font-medium mt-4"
+          >
+            <ArrowRightLeft className="mr-2 h-5 w-5" />
+            Transfer
+          </Button>
         </div>
       </div>
 
-      {/* Wallet Action Dialogs */}
-      <CryptoDepositDialog
-        open={cryptoDepositDialogOpen}
-        onOpenChange={setCryptoDepositDialogOpen}
+      {/* Transfer Dialog */}
+      <USDTTransferDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        totalWalletBalance={wallets
+          .filter((w) => {
+            const network = w.network?.toUpperCase() || "";
+            return network.includes("USDT") || network === "TRC20";
+          })
+          .reduce((sum, w) => sum + w.balance, 0)}
+        reverse={true}
+        onSuccess={() => {
+          // Refetch trading balance and wallets after transfer
+          queryClient.invalidateQueries({
+            queryKey: ["trading-balance", user?.id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["trading-panel-wallets", user?.id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["usdt-wallets", user?.id],
+          });
+        }}
       />
-      {selectedWallet && (
-        <>
-          <USDTTransferDialog
-            open={transferDialogOpen}
-            onOpenChange={setTransferDialogOpen}
-            totalWalletBalance={wallets
-              .filter((w) => {
-                const network = w.network?.toUpperCase() || "";
-                return network.includes("USDT") || network === "TRC20";
-              })
-              .reduce((sum, w) => sum + w.balance, 0)}
-            reverse={true}
-            onSuccess={() => {
-              // Refetch trading balance and wallets after transfer
-              queryClient.invalidateQueries({
-                queryKey: ["trading-balance", user?.id],
-              });
-              queryClient.invalidateQueries({
-                queryKey: ["trading-panel-wallets", user?.id],
-              });
-              queryClient.invalidateQueries({
-                queryKey: ["usdt-wallets", user?.id],
-              });
-            }}
-          />
-          <USDTWithdrawDialog
-            open={withdrawDialogOpen}
-            onOpenChange={setWithdrawDialogOpen}
-            wallet={selectedWallet}
-            onSuccess={() => {
-              // Refetch trading balance after withdraw
-              queryClient.invalidateQueries({
-                queryKey: ["trading-balance", user?.id],
-              });
-            }}
-          />
-        </>
-      )}
     </div>
   );
 };
